@@ -160,6 +160,19 @@ const POKUANG = {
   inkCost: 40,             // 墨耗（大招更贵）
 };
 
+/**
+ * 场地边界（俗称「空气墙」）
+ * 主角与妖墨共用同一套边界：主角走不出去，妖墨也不许待在墙外——
+ * 否则会出现「怪物站在墙外贴身砍你、你却打不到」的穿墙僵局。
+ */
+const ARENA = {
+  halfX: 1200,        // 左右空气墙（世界坐标 ±）
+  halfZ: 130,         // 纵深空气墙：近/远（世界坐标 ±）
+  spawnMargin: 30,    // 刷怪点距墙内缩量，避免贴墙生成后立刻被推出界
+  minSpawnDist: 380,  // 刷怪点与主角的最小距离（防止「贴脸凭空冒怪」）
+  bodyRadius: 18,     // 妖墨体型半径（钳制时留出的身体余量）
+};
+
 /** 无双普通阵名池：随阵号轮换，营造「杀不完的妖墨浪潮」氛围 */
 const MUSOU_WAVE_TITLES = ['妖墨狂潮', '群魔夜袭', '血战到底', '万军丛中', '墨海翻涌', '十面埋伏', '风声鹤唳', '杀阵突开'];
 /** 无双连杀里程碑：连击达到节点触发全屏演出（字→激波→锣声） */
@@ -722,6 +735,22 @@ export class GameEngine {
     const scale = 0.85 + depthFactor * 0.45;
     const x = (sx - w / 2) / scale + this.cameraX;
     return { x, z };
+  }
+
+  /**
+   * 把坐标钳进空气墙内（主角与妖墨共用）。
+   * margin：额外内缩量，用于按体型半径留出身体余量，避免半截身子探到墙外。
+   */
+  private clampToArena(pos: { x: number; z: number }, margin: number = 0) {
+    const hx = Math.max(60, ARENA.halfX - margin);
+    const hz = Math.max(20, ARENA.halfZ - margin);
+    pos.x = Math.max(-hx, Math.min(hx, pos.x));
+    pos.z = Math.max(-hz, Math.min(hz, pos.z));
+  }
+
+  /** 判定某个世界坐标是否已越出空气墙（刷怪/瞬移用） */
+  private isOutsideArena(x: number, z: number, margin: number = 0): boolean {
+    return Math.abs(x) > ARENA.halfX - margin || Math.abs(z) > ARENA.halfZ - margin;
   }
 
   public distToSegment(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
@@ -1432,10 +1461,22 @@ export class GameEngine {
       }
     }
 
-    // Spawn from left or right edge of pseudo-3D arena
+    // 刷怪入场：从场地左右两侧压上（落点必须落在空气墙内侧）
+    // 主角贴墙时该侧已无空间，自动换到另一侧，避免「贴着墙凭空冒怪」
     const spawnSide = Math.random() > 0.5 ? 1 : -1;
-    const spawnX = this.player.pos.x + spawnSide * (this.screenWidth * 0.55 + Math.random() * 80);
-    const spawnZ = (Math.random() - 0.5) * 220;
+    const spawnDist = this.screenWidth * 0.55 + Math.random() * 80;
+    const px = this.player.pos.x;
+    let spawnX = px + spawnSide * spawnDist;
+    if (
+      this.isOutsideArena(spawnX, 0, ARENA.spawnMargin) ||
+      Math.abs(spawnX - px) < ARENA.minSpawnDist
+    ) {
+      const altX = px - spawnSide * spawnDist;
+      if (!this.isOutsideArena(altX, 0, ARENA.spawnMargin)) spawnX = altX;
+    }
+    const spawnZ = (Math.random() - 0.5) * (ARENA.halfZ * 1.7);
+    const spawnPos = { x: spawnX, z: spawnZ };
+    this.clampToArena(spawnPos, ARENA.spawnMargin);
 
     // 精英词缀掷骰（第3折起，Boss波不出；无双节奏快上限放宽到 4）
     let elite: EliteInfo | null = null;
@@ -1447,7 +1488,7 @@ export class GameEngine {
       }
     }
 
-    this.spawnEnemyAt(type, spawnX, spawnZ, isBoss, elite);
+    this.spawnEnemyAt(type, spawnPos.x, spawnPos.z, isBoss, elite);
     return true;
   }
 
@@ -1479,6 +1520,13 @@ export class GameEngine {
   }
 
   private spawnEnemyAt(type: EnemyType, spawnX: number, spawnZ: number, isBoss: boolean = false, elite: EliteInfo | null = null) {
+    // 出生点统一收口：无论波次刷怪、妖符召唤还是 Boss 唤卒，落点一律钳进空气墙内
+    {
+      const sp = { x: spawnX, z: spawnZ };
+      this.clampToArena(sp, ARENA.spawnMargin);
+      spawnX = sp.x;
+      spawnZ = sp.z;
+    }
     const tune = DIFFICULTY_TUNING[this.difficulty];
     const isMusou = this.gameMode === 'MUSOU';
     // 无双怪海：敌方数值全局乘减（割草爽感 + 高频围攻的生存空间）
@@ -2761,6 +2809,7 @@ export class GameEngine {
         const side: 1 | -1 = player.pos.x <= target.pos.x ? -1 : 1;
         player.pos.x = target.pos.x + side * 62;
         player.pos.z = target.pos.z;
+        this.clampToArena(player.pos); // 贴身落点同样不得越出空气墙
         player.pos.y = Math.max(0, target.pos.y * 0.35);
         player.vel.y = 0;
         player.facing = side === -1 ? 1 : -1;
@@ -3032,7 +3081,8 @@ export class GameEngine {
           if (Math.random() < 0.28) {
             const side = Math.random() < 0.5 ? 1 : -1;
             enemy.pos.x -= player.facing * 55;
-            enemy.pos.z = Math.max(-140, Math.min(140, enemy.pos.z + side * 52));
+            enemy.pos.z += side * 52;
+            this.clampToArena(enemy.pos, ARENA.bodyRadius);
             enemy.dodgeCooldown = 2.5;
             this.spawnSpeedLines(enemy.pos, 6, '#5b2333');
             this.addFloatingText('醉避', enemy.pos.x, enemy.pos.y + 58, '#5b2333', 1.15);
@@ -3167,7 +3217,19 @@ export class GameEngine {
         this.spawnInkBurst({ x: enemy.pos.x + enemy.facing * 18, y: 30, z: enemy.pos.z }, 8, '#64748b');
         this.addFloatingText(`格挡 · ${chipped}`, enemy.pos.x, enemy.pos.y + 55, '#64748b', 1.1);
         sound.playHit(false);
-        if (enemy.hp <= 0) this.killEnemy(enemy); // 正面磨血致死走正常死亡结算
+        if (enemy.hp <= 0) { this.killEnemy(enemy); return; } // 正面磨血致死走正常死亡结算
+
+        // 「只有主角免疫僵直」：举盾的武僧同样吃硬直，只是硬直更短、几乎不退。
+        // 盾牌仍保留 80% 减伤（绕背破防依旧最优解），但站着硬砍也能压住它的推进节奏。
+        const blockStun = stunOverride ?? (isCrit ? 0.3 : 0.18);
+        enemy.hitStun = Math.max(enemy.hitStun, blockStun);
+        enemy.maxHitStun = enemy.hitStun;
+        enemy.state = 'HURT';
+        enemy.stateTimer = 0;
+        enemy.stateDuration = enemy.hitStun;
+        enemy.windupTimer = 0;                                  // 举盾也被打断前摇
+        enemy.attackCooldown = Math.max(enemy.attackCooldown, 0.7);
+        enemy.vel.x = (enemy.pos.x >= player.pos.x ? 1 : -1) * 1.6; // 盾后轻退
         return;
       }
     }
@@ -3950,9 +4012,8 @@ export class GameEngine {
       }
     }
 
-    // Boundary constraints for Pseudo-3D Arena
-    player.pos.z = Math.max(-130, Math.min(130, player.pos.z));
-    player.pos.x = Math.max(-1200, Math.min(1200, player.pos.x));
+    // Boundary constraints for Pseudo-3D Arena（空气墙：与妖墨共用 ARENA 边界）
+    this.clampToArena(player.pos);
 
     // Smooth camera tracking
     const targetCamX = player.pos.x;
@@ -4061,7 +4122,8 @@ export class GameEngine {
       enemy.pos.z += enemy.vel.z * dt * 60;
       enemy.vel.x *= knockDamp;
       enemy.vel.z *= knockDamp;
-      enemy.pos.z = Math.max(-140, Math.min(140, enemy.pos.z));
+      // 击退不得把妖墨推出空气墙（超出即撞墙止步）
+      this.clampToArena(enemy.pos, ARENA.bodyRadius);
 
       // 朱砂焚意：灼烧 DoT 结算（不触发硬直）
       if ((enemy.burnTimer ?? 0) > 0) {
@@ -4371,7 +4433,7 @@ export class GameEngine {
           // 俯冲穿刺：沿锁定方向快速下坠，触地即判定冲击
           enemy.pos.x += (enemy.craneVX ?? 0) * dt * slowFactor;
           enemy.pos.z += (enemy.craneVZ ?? 0) * dt * slowFactor;
-          enemy.pos.z = Math.max(-140, Math.min(140, enemy.pos.z));
+          this.clampToArena(enemy.pos, ARENA.bodyRadius);
           enemy.pos.y = Math.max(0, enemy.pos.y - 320 * dt);
           enemy.vel.y = 0;
           enemy.state = 'ATTACK_DASH';
@@ -4521,6 +4583,14 @@ export class GameEngine {
           sound.playWindup();
         }
       }
+    }
+
+    // --- 空气墙兜底：所有移动路径（追击/冲锋/瞬移/俯冲/击退）统一钳制 ---
+    // 放在 AI 循环之后，任何 `continue` 提前跳出的分支也不会漏掉，
+    // 保证妖墨永远站在主角走得到的场地内，不会隔墙砍人。
+    for (const enemy of this.enemies) {
+      if (enemy.hp <= 0) continue;
+      this.clampToArena(enemy.pos, ARENA.bodyRadius);
     }
 
     // Clean up faded corpses（原地压实，避免每帧 filter 分配新数组；同步清理走路相位缓存）
