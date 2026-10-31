@@ -2434,42 +2434,47 @@ export class GameEngine {
       }
 
       case 'DIAGONAL_UP': {
-        // 破空光剑（夏洛特大招）：原地画出七道剑痕，周身群伤 + 50% 减速，期间霸体免伤
+        // 破空光剑（夏洛特大招）：一笔一笔画出七道剑痕，周身群伤 + 50% 减速，期间霸体免伤
         player.state = 'ATTACK_TAICHI';
         player.stateTimer = 0;
         player.stateDuration = this.poseDur(0.62);
         player.vel.x = 0;
         player.vel.y = 0;
         sound.playSlash('whirlwind');
-        this.cameraShake = 14;
+        this.cameraShake = 10;
         this.pokuangTimer = POKUANG.guardSec;
         this.addFloatingText('破空光剑', player.pos.x, player.pos.y + 74, '#fde68a', 1.5, true, true);
-        this.spawnShockRing(player.pos.x, player.pos.z, 10, 150, 0.5, '#fde68a', 3);
-        this.triggerZoomPunch(0.024);
+        this.triggerZoomPunch(0.02);
 
-        // 七道剑痕依次在原地绽开（追加技：九道）
+        // 七道剑痕自左向右一笔笔划过身前（不是绕圈；追加技：九道）
         const blades = isFollowUp ? POKUANG.bladesFollowUp : POKUANG.blades;
         for (let i = 0; i < blades; i++) {
           this.schedule(i * POKUANG.intervalSec, () => {
             if (this.runEnded || player.hp <= 0) return;
-            const ang = (i / blades) * Math.PI * 2;
-            const ox = Math.cos(ang) * 46;
-            const oz = Math.sin(ang) * 30;
-            // 七道剑痕：交错横竖笔触，首末道更亮（不堆叠特效）
+            const isFirst = i === 0;
+            const isLast = i === blades - 1;
+            // 落笔位置沿一条横带推进：左 → 右，纵深轻微错开避免叠成一条线
+            const t01 = blades > 1 ? i / (blades - 1) : 0.5;
+            const sweepX = (-1 + t01 * 2) * 92;
+            const ox = player.facing * (36 + Math.abs(sweepX) * 0.12);
+            const oz = sweepX * 0.52;
+
+            // 每道都是一笔直线剑痕（不用弧光，避免看起来像画圈）
             this.spawnInkSlash(
               player.pos.x + ox,
               player.pos.y + 24,
               player.pos.z + oz,
-              i % 2 === 0 ? 'VERTICAL' : 'HORIZONTAL',
+              'THRUST',
               player.facing,
-              i === 0 || i === blades - 1 ? 1.0 : 0.62,
-              i === 0 || i === blades - 1 ? '#fde68a' : '#e2e8f0',
+              isFirst || isLast ? 1.15 : 0.8,
+              isFirst || isLast ? '#fde68a' : '#e2e8f0',
             );
+
             // 首道全额，其后每道仅 30% 伤害
             this.performHitCheck({
               rangeX: POKUANG.radiusX,
               rangeZ: POKUANG.radiusZ,
-              damageMultiplier: POKUANG.firstDmgMult * (i === 0 ? 1 : POKUANG.restRatio),
+              damageMultiplier: POKUANG.firstDmgMult * (isFirst ? 1 : POKUANG.restRatio),
               knockbackX: 0,
               knockbackY: 3,
               isGesture: true,
@@ -2478,6 +2483,7 @@ export class GameEngine {
               followUp: isFollowUp,
               gestureType: res.type,
             });
+
             // 剑痕减速 50%
             for (const e of this.enemies) {
               if (e.hp <= 0) continue;
@@ -2486,10 +2492,7 @@ export class GameEngine {
                 e.qixingSlowPct = POKUANG.slowPct;
               }
             }
-            this.cameraShake = Math.max(this.cameraShake, i === 0 ? 11 : 4);
-            if (i === 0 || i === blades - 1) {
-              this.spawnShockRing(player.pos.x, player.pos.z, 6, i === 0 ? 96 : 132, 0.34, '#fde68a', 2);
-            }
+            this.cameraShake = Math.max(this.cameraShake, isLast ? 10 : 3);
           });
         }
         break;
