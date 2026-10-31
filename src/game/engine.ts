@@ -106,12 +106,12 @@ const MUSOU_TUNING = {
 /**
  * 被动 · 七星光芒剑（复刻王者荣耀夏洛特被动，按本作数值与节奏换算）
  * 机制：任意招式命中叠加 1 层「剑意」（4 秒内续击可叠，最多 3 层）；
- * 叠满 3 层后，下一次普攻（到达斩击 / 墨刺）自动升格为「七星光芒剑」——
+ * 叠满 5 层后，下一次技能自动升格为「七星光芒剑」——
  * 锁定最近妖墨贴身追击，连挥七剑（每段附 20% 减速 + 伤残减攻速），
  * 末剑追加目标已损气血 12% 的斩杀伤害，释放期间获得 21%~35% 免伤。
  */
 const QIXING = {
-  maxStacks: 5,            // 七星印记上限（五层圆满，下一次普攻升格）
+  maxStacks: 5,            // 七星印记上限（五层圆满，下一次技能升格）
   stackWindowSec: 4,       // 剑意持续（秒）
   hits: 7,                 // 七段斩击
   hitDmgMult: 0.62,        // 每段伤害 = 基础 24 × 该系数（总倍率约 4.34）
@@ -186,7 +186,7 @@ export interface GameEngineCallbacks {
   onControlModeChange?: (mode: ControlMode) => void;
   /** 觉醒槽变化（0~100，满槽可释放「万墨归宗」） */
   onAwakeningChange?: (value: number, maxValue: number) => void;
-  /** 剑意层数变化（被动·七星光芒剑：0~5，满层下次普攻升格） */
+  /** 印记层数变化（被动·七星光芒剑：0~5，满层下次技能升格） */
   onSwordIntentChange?: (stacks: number, maxStacks: number) => void;
   /** 追加技待发状态变化（命中后其他招式强化） */
   onFollowUpChange?: (ready: boolean) => void;
@@ -231,7 +231,7 @@ export class GameEngine {
   private lastAwakeningEmitted: number = -1;
 
   // --- 被动·七星光芒剑 ---
-  /** 七星连斩演出中：期间不再叠剑意，也不被新的普攻打断 */
+  /** 七星连斩演出中：期间不再叠印记，也不被新的出招打断 */
   private qixingActive: boolean = false;
   /** 当前七星免伤百分比（随折数成长 21%~35%） */
   private qixingGuardPercent: number = QIXING.guardBase;
@@ -1028,7 +1028,7 @@ export class GameEngine {
     this.callbacks.onSwordIntentChange(val, QIXING.maxStacks);
   }
 
-  /** 招式命中叠一层印记（4 秒不续则清零；五层圆满后普攻升格七星光芒剑） */
+  /** 招式命中叠一层印记（4 秒不续则清零；五层圆满后下一技能升格七星光芒剑） */
   private gainSwordIntent() {
     const player = this.player;
     if (this.qixingActive || player.hp <= 0) return;
@@ -1056,7 +1056,7 @@ export class GameEngine {
     }
   }
 
-  /** 剑意是否已满（普攻可升格为七星光芒剑） */
+  /** 印记是否已满（下一次技能可升格为七星光芒剑） */
   private get swordIntentReady(): boolean {
     return !this.qixingActive && this.player.swordIntent >= QIXING.maxStacks && this.player.hp > 0;
   }
@@ -2197,7 +2197,7 @@ export class GameEngine {
       player.facing = nearestEnemy.pos.x >= player.pos.x ? 1 : -1;
     }
 
-    // 被动·七星光芒剑：印记圆满时由「技能」触发（普攻/滑砍不消耗，故此处不再升格）
+    // 被动·七星光芒剑：印记圆满时由「技能」触发（滑砍落地斩不算技能，不消耗印记）
 
     // Automatically unleash arrival strike
     const attackStances: ActionState[] = ['ATTACK_HORIZONTAL', 'ATTACK_THRUST', 'ATTACK_DASH'];
@@ -2299,7 +2299,7 @@ export class GameEngine {
   private executeGestureMove(res: GestureResult) {
     const player = this.player;
 
-    // 被动·七星光芒剑：印记圆满时，下一次「技能」升格为七段追击斩（普攻不消耗，留作衔接）
+    // 被动·七星光芒剑：印记圆满时，下一次「技能」升格为七段追击斩
     if (this.swordIntentReady) {
       this.executeSevenStarBlade();
       return;
@@ -2448,9 +2448,8 @@ export class GameEngine {
         this.cameraShake = 14;
         this.pokuangTimer = POKUANG.guardSec;
         this.addFloatingText('破空光剑', player.pos.x, player.pos.y + 74, '#fde68a', 1.5, true, true);
-        this.spawnShockRing(player.pos.x, player.pos.z, 12, 168, 0.55, '#fde68a', 3.5);
-        this.spawnShockRing(player.pos.x, player.pos.z, 6, 104, 0.4, '#f8fafc', 2.5);
-        this.triggerZoomPunch(0.03);
+        this.spawnShockRing(player.pos.x, player.pos.z, 10, 150, 0.5, '#fde68a', 3);
+        this.triggerZoomPunch(0.024);
 
         // 七道剑痕依次在原地绽开（追加技：九道）
         const blades = isFollowUp ? POKUANG.bladesFollowUp : POKUANG.blades;
@@ -2460,15 +2459,20 @@ export class GameEngine {
             const ang = (i / blades) * Math.PI * 2;
             const ox = Math.cos(ang) * 46;
             const oz = Math.sin(ang) * 30;
-            this.spawnInkSlash(
-              player.pos.x + ox,
-              player.pos.y + 24,
-              player.pos.z + oz,
-              'QIXING',
-              player.facing,
-              i === 0 ? 1.35 : 0.92,
-              i === 0 ? '#fde68a' : '#e2e8f0',
-            );
+            // 只首道与末道绽放星芒，其余为简练斩痕（大招特效不堆叠）
+            if (i === 0 || i === blades - 1) {
+              this.spawnInkSlash(
+                player.pos.x + ox,
+                player.pos.y + 24,
+                player.pos.z + oz,
+                'QIXING',
+                player.facing,
+                i === 0 ? 1.15 : 0.95,
+                i === 0 ? '#fde68a' : '#e2e8f0',
+              );
+            } else {
+              this.spawnInkSlash(player.pos.x + ox, player.pos.y + 22, player.pos.z + oz, 'VERTICAL', player.facing, 0.55, '#e2e8f0');
+            }
             // 首道全额，其后每道仅 30% 伤害
             this.performHitCheck({
               rangeX: POKUANG.radiusX,
@@ -2490,8 +2494,10 @@ export class GameEngine {
                 e.qixingSlowPct = POKUANG.slowPct;
               }
             }
-            this.cameraShake = Math.max(this.cameraShake, i === 0 ? 13 : 5);
-            this.spawnShockRing(player.pos.x, player.pos.z, 6, 92 + i * 6, 0.32, '#fde68a', 2);
+            this.cameraShake = Math.max(this.cameraShake, i === 0 ? 11 : 4);
+            if (i === 0 || i === blades - 1) {
+              this.spawnShockRing(player.pos.x, player.pos.z, 6, i === 0 ? 96 : 132, 0.34, '#fde68a', 2);
+            }
           });
         }
         break;
@@ -2698,17 +2704,21 @@ export class GameEngine {
         player.stateTimer = 0;
         player.stateDuration = this.poseDur(0.12);
 
-        // 七道星芒剑痕（浮生妄：朱红剑痕 + 末剑金芒）
-        this.spawnInkSlash(
-          target.pos.x,
-          target.pos.y + 26,
-          target.pos.z,
-          'QIXING',
-          player.facing,
-          isLast ? 1.55 : 1.0 + i * 0.045,
-          isLast ? '#fde68a' : '#f8fafc',
-        );
-        this.spawnInkBurst(target.pos, isLast ? 14 : 4, isLast ? '#fde68a' : '#e2e8f0');
+        // 首剑与末剑绽放七星光阵剑光，中间六剑只用一道清亮斩痕（避免满屏重复星芒）
+        if (i === 0 || isLast) {
+          this.spawnInkSlash(
+            target.pos.x,
+            target.pos.y + 26,
+            target.pos.z,
+            'QIXING',
+            player.facing,
+            isLast ? 1.5 : 1.05,
+            isLast ? '#fde68a' : '#f8fafc',
+          );
+        } else {
+          this.spawnInkSlash(target.pos.x, target.pos.y + 24, target.pos.z, 'THRUST', player.facing, 0.62, '#f1f5f9');
+        }
+        this.spawnInkBurst(target.pos, isLast ? 12 : 3, isLast ? '#fde68a' : '#e2e8f0');
 
         // 剑阵随目标移动，并点亮第 i+1 个符位
         if (this.qixingSigil) {
@@ -3012,7 +3022,7 @@ export class GameEngine {
     }
 
     if (hitCount > 0) {
-      // 被动·七星光芒剑：招式命中叠一层印记（一次挥击只叠一层，五层圆满普攻升格）
+      // 被动·七星光芒剑：招式命中叠一层印记（一次挥击只叠一层，五层圆满后下一技能升格）
       this.gainSwordIntent();
 
       // 被动·追加技：命中后，下一个「不同」招式自动强化为追加技
@@ -5684,25 +5694,20 @@ export class GameEngine {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // 七芒星本体：七顶点按 {7/3} 步进连线
+    // 七芒星轮廓：以七段短弧勾勒，避免直棒感
     const px: number[] = [];
     const py: number[] = [];
     for (let i = 0; i < 7; i++) {
       const a = -Math.PI / 2 + (i / 7) * Math.PI * 2 + spin * 0.35;
       px.push(Math.cos(a) * R * 0.92);
       py.push(Math.sin(a) * R * 0.92);
+      ctx.globalAlpha = 0.6 * fade;
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 2 * pr.scale;
+      ctx.beginPath();
+      ctx.arc(0, 0, R * 0.92, a - 0.16, a + 0.16);
+      ctx.stroke();
     }
-    ctx.globalAlpha = 0.85 * fade;
-    ctx.strokeStyle = '#fbbf24';
-    ctx.lineWidth = 2.2 * pr.scale;
-    ctx.beginPath();
-    for (let i = 0; i <= 7; i++) {
-      const k = (i * 3) % 7;
-      if (i === 0) ctx.moveTo(px[k], py[k]);
-      else ctx.lineTo(px[k], py[k]);
-    }
-    ctx.stroke();
-
     // 光符节点：随每一剑依次点亮
     for (let i = 0; i < 7; i++) {
       const lit = i < s.hits;
@@ -5959,47 +5964,29 @@ export class GameEngine {
           break;
         }
         case 'QIXING': {
-          // 七星：七道星芒剑痕自中心放射（随进度缓缓旋开，末剑金芒更盛）
-          ctx.rotate(-Math.PI / 2 + ease * 0.55);
+          // 七星光芒剑：七道弧形剑光绕心旋转（弯月笔触层层叠出星芒，不是放射直线）
+          const sweep = 1.22;      // 单道剑光跨度
+          const rot = ease * 1.15; // 整体旋转
           for (let i = 0; i < 7; i++) {
-            const a = (i / 7) * Math.PI * 2;
-            const len = R * (0.95 + rnd() * 0.22);
-            const w = (i === 0 ? 9 : 6.4) * s.size;
-            const c = Math.cos(a);
-            const sn = Math.sin(a);
-            // 墨晕层（外扩虚边）
-            ctx.globalAlpha = alpha * 0.3;
-            ctx.strokeStyle = s.color;
-            ctx.lineWidth = w * 2.2;
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(c * R * 0.12, sn * R * 0.12);
-            ctx.lineTo(c * len, sn * len);
-            ctx.stroke();
-            // 焦墨主笔
-            ctx.globalAlpha = alpha * 0.95;
-            ctx.lineWidth = w;
-            ctx.beginPath();
-            ctx.moveTo(c * R * 0.08, sn * R * 0.08);
-            ctx.lineTo(c * len, sn * len);
-            ctx.stroke();
-            // 金芒挑锋
-            ctx.globalAlpha = alpha;
-            ctx.strokeStyle = '#fde68a';
-            ctx.lineWidth = Math.max(1, w * 0.3);
-            ctx.beginPath();
-            ctx.moveTo(c * len * 0.55, sn * len * 0.55);
-            ctx.lineTo(c * len * 1.04, sn * len * 1.04);
-            ctx.stroke();
-            ctx.strokeStyle = s.color;
+            const a0 = (i / 7) * Math.PI * 2 + rot;
+            const a1 = a0 + sweep;
+            const rr = R * (0.9 + (i % 3) * 0.07);
+            // 墨晕（宽而淡）
+            drawArcPass(a0, a1, rr, 15 * s.size, 3, s.color, 0.22);
+            // 主笔（起笔重收笔轻）
+            drawArcPass(a0, a1, rr, 7.5 * s.size, 0.9, s.color, 0.95);
+            // 金锋（收笔挑光）
+            drawArcPass(a0 + sweep * 0.72, a1, rr * 1.02, 2.2, 0.4, '#fde68a', 0.9);
           }
-          // 星芒外环
+          // 中心光核
           ctx.globalAlpha = alpha * 0.55;
-          ctx.strokeStyle = '#fde68a';
-          ctx.lineWidth = 1.6 * s.size;
+          const core = ctx.createRadialGradient(0, 0, 0, 0, 0, R * 0.5);
+          core.addColorStop(0, 'rgba(255,255,255,0.9)');
+          core.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.fillStyle = core;
           ctx.beginPath();
-          ctx.arc(0, 0, R * 1.02, 0, Math.PI * 2);
-          ctx.stroke();
+          ctx.arc(0, 0, R * 0.5, 0, Math.PI * 2);
+          ctx.fill();
           break;
         }
       }

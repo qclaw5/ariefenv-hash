@@ -109,10 +109,10 @@ export const ManualModal: React.FC<ManualModalProps> = ({ onClose }) => {
           <Swords className="w-4 h-4 text-[#b45309] shrink-0 mt-0.5" />
           <div className="text-[11px] font-ink-serif text-[#85745a] leading-relaxed">
             <span className="font-calligraphy text-sm text-[#92400e] mr-1.5">被动 · 七星光芒剑</span>
-            任意招式<strong className="text-[#b45309]">命中妖墨</strong>即叠一层<strong className="text-[#b45309]">「剑意」</strong>（4 秒内续击可续，至多 3 层，顶部 HUD 以星点显示）。
-            三层圆满后<strong className="text-[#b91c1c]">下一次普攻（轻点 / 滑砍落地斩）自动升格</strong>为七星光芒剑：锁敌瞬身贴身连挥<strong>七剑</strong>——
-            每段附 <strong>20% 减速</strong>与<strong>伤残</strong>（每层 -10% 攻速，最多 2 层），末剑追加目标<strong className="text-[#b91c1c]">已损气血 12%</strong> 的斩杀伤害；
-            七剑期间获得 <strong>21%~35% 免伤</strong>（随折数成长）。剑意 4 秒不续即散，趁势打出去才是正理。
+            任意招式<strong className="text-[#b45309]">命中妖墨</strong>即叠一层<strong className="text-[#b45309]">「印记」</strong>（4 秒内续击可续，至多 <strong>5 层</strong>，技能键上方星点显示）。
+            <strong className="text-[#0369a1]">追加技</strong>：命中后下一个<strong>不同</strong>招式自动强化（伤害 ×1.45、范围 ×1.25、附带伤残），且<strong className="text-[#0369a1]">不耗墨意</strong>。
+            五层圆满后<strong className="text-[#b91c1c]">下一次技能自动升格</strong>为七星光芒剑：锁敌瞬身连挥<strong>七剑</strong>——每段附 <strong>20% 减速</strong>与<strong>伤残</strong>（每层 -10% 攻速，最多 2 层），
+            末剑追加目标<strong className="text-[#b91c1c]">已损气血 12%</strong> 的斩杀伤害，七剑期间获得 <strong>21%~35% 免伤</strong>（随折数成长）。
           </div>
         </div>
 
