@@ -1052,6 +1052,16 @@ export class GameEngine {
     }
   }
 
+  /** 视野内是否还有活着的妖墨（印记计时只在有目标时流逝） */
+  private hasTargetsInView(): boolean {
+    for (const e of this.enemies) {
+      if (e.hp <= 0) continue;
+      const pr = this.projectXYZ(e.pos.x, e.pos.y, e.pos.z);
+      if (pr.sx > -160 && pr.sx < this.screenWidth + 160) return true;
+    }
+    return false;
+  }
+
   /** 印记是否达 3 层（下一次技能可升格为七星光芒剑） */
   private get swordIntentReady(): boolean {
     return !this.qixingActive && this.player.swordIntent >= QIXING.triggerStacks && this.player.hp > 0;
@@ -2059,6 +2069,13 @@ export class GameEngine {
 
         this.damageEnemy(enemy, finalDmg, isCrit, undefined, true);
 
+        // 被动：瞬杀连斩同样算「命中」——叠印记并为下一招挂追加技
+        this.gainSwordIntent();
+        if (!player.followUpReady) {
+          player.followUpReady = true;
+          this.emitFollowUp();
+        }
+
         // 点睛演出：朱砂点穴墨花 + 印章浮字（先于躯干特效，突出命中位置在头顶）
         if (target.eye) {
           this.addFloatingText('点睛', enemy.pos.x, enemy.pos.y + 76, '#b91c1c', 1.5, true, true);
@@ -2448,6 +2465,21 @@ export class GameEngine {
         if (!isFollowUp) this.addFloatingText('破空光剑', player.pos.x, player.pos.y + 74, '#fde68a', 1.5, true, true);
         this.triggerZoomPunch(0.02);
 
+        // 星芒：贴着自己身体绕成一环绽开（六星，追加技七星）
+        const starCount = isFollowUp ? 7 : 6;
+        for (let i = 0; i < starCount; i++) {
+          const a = -Math.PI / 2 + (i / starCount) * Math.PI * 2;
+          this.spawnInkSlash(
+            player.pos.x + Math.cos(a) * 52,
+            player.pos.y + 34 + Math.sin(a) * 26,
+            player.pos.z,
+            'STAR',
+            player.facing,
+            0.85 + (i % 2) * 0.12,
+            i === starCount - 1 ? '#fde68a' : '#ffffff',
+          );
+        }
+
         // 七道剑痕自左向右一笔笔划过身前（不是绕圈；追加技：九道）
         const blades = isFollowUp ? POKUANG.bladesFollowUp : POKUANG.blades;
         for (let i = 0; i < blades; i++) {
@@ -2494,7 +2526,20 @@ export class GameEngine {
                 e.qixingSlowPct = POKUANG.slowPct;
               }
             }
-            this.cameraShake = Math.max(this.cameraShake, isLast ? 10 : 3);
+            // 末道剑痕：挑飞周身妖墨
+            if (isLast) {
+              for (const e of this.enemies) {
+                if (e.hp <= 0) continue;
+                if (Math.hypot(e.pos.x - player.pos.x, e.pos.z - player.pos.z) < POKUANG.radiusX + 24) {
+                  e.vel.y = 15;
+                  e.isAirborne = true;
+                  e.hitStun = Math.max(e.hitStun, 0.6);
+                }
+              }
+              this.cameraShake = 12;
+            } else {
+              this.cameraShake = Math.max(this.cameraShake, 3);
+            }
           });
         }
         break;
@@ -2654,32 +2699,11 @@ export class GameEngine {
     );
     player.qixingGuardTimer = QIXING.sequenceSec;
 
-    // 追加技形态：七星（否则六星），并消耗追加技状态
-    const starCount = isFollowUp ? 7 : 6;
-    if (isFollowUp) {
-      player.followUpReady = false;
-      this.emitFollowUp();
-    }
-
     sound.playCalligraphyGong('七星光芒剑');
     this.addFloatingText('『七星光芒剑』', player.pos.x, player.pos.y + 92, '#fbbf24', 1.7, true, true);
     this.spawnShockRing(player.pos.x, player.pos.z, 8, 120, 0.45, '#fde68a', 3);
     this.triggerZoomPunch(0.026);
     this.cameraShake = 9;
-
-    // 星芒：贴着自己身体绕成一环绽开（追加技多一颗）
-    for (let i = 0; i < starCount; i++) {
-      const a = -Math.PI / 2 + (i / starCount) * Math.PI * 2;
-      this.spawnInkSlash(
-        player.pos.x + Math.cos(a) * 54,
-        player.pos.y + 34 + Math.sin(a) * 28,
-        player.pos.z,
-        'STAR',
-        player.facing,
-        0.85 + (i % 2) * 0.12,
-        i === starCount - 1 ? '#fde68a' : '#ffffff',
-      );
-    }
 
     const affixMult = this.getAffixDamageMultiplier();
     const gestureMult = this.getGestureDamageMultiplier();
@@ -2739,11 +2763,7 @@ export class GameEngine {
         }
 
         // 末剑：追加目标已损气血 12% 的斩杀伤害
-        // 末剑：击飞 + 斩杀
         if (isLast && target.hp > 0) {
-          target.vel.y = 15;      // 挑飞
-          target.isAirborne = true;
-          target.hitStun = Math.max(target.hitStun, 0.6);
           const missing = Math.max(0, target.maxHp - target.hp);
           const execDmg = Math.max(1, Math.round((missing * QIXING.executePercent) / 100));
           this.damageEnemy(target, execDmg, true, 0.95, true);
@@ -3736,16 +3756,20 @@ export class GameEngine {
       }
     }
 
-    // 剑意衰减：4 秒内不续击则清零（满层同样受此限，逼玩家趁势打出去）
-    if (player.swordIntentTimer > 0) {
+    // 印记衰减：视野内有目标才计时（无敌人时冻结，不会白掉层）
+    if (player.swordIntentTimer > 0 && player.swordIntent > 0 && this.hasTargetsInView()) {
       player.swordIntentTimer -= dt;
-      if (player.swordIntentTimer <= 0 && player.swordIntent > 0) {
+      if (player.swordIntentTimer <= 0) {
         player.swordIntent = 0;
         this.emitSwordIntent(true);
       }
     }
     // 七星免伤计时
     if (player.qixingGuardTimer > 0) player.qixingGuardTimer -= dt;
+    // 七星看门狗：连斩被打断（调度被清空等）时强制解锁，避免印记永久封死
+    if (this.qixingActive && player.qixingGuardTimer <= 0) {
+      this.qixingActive = false;
+    }
     // 破空光剑霸体计时
     if (this.pokuangTimer > 0) this.pokuangTimer -= dt;
 
