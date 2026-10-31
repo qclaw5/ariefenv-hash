@@ -2295,14 +2295,14 @@ export class GameEngine {
   private executeGestureMove(res: GestureResult) {
     const player = this.player;
 
-    // 被动·七星光芒剑：印记圆满时，下一次「技能」升格为七段追击斩
-    if (this.swordIntentReady) {
-      this.executeSevenStarBlade();
-      return;
-    }
-
     // 被动·追加技：命中后下一次技能即为追加技（墨耗为 0）；本招未命中则状态消耗、下次不再是追加技
     const isFollowUp = player.followUpReady;
+
+    // 被动·七星光芒剑：印记达 3 层时，下一次「技能」升格为七段追击斩（追加技形态为七星）
+    if (this.swordIntentReady) {
+      this.executeSevenStarBlade(isFollowUp);
+      return;
+    }
 
     // Check ink cost（无双墨耗减免：招式放得勤快；追加技不耗墨意）
     const inkCost = isFollowUp
@@ -2445,7 +2445,7 @@ export class GameEngine {
         sound.playSlash('whirlwind');
         this.cameraShake = 10;
         this.pokuangTimer = POKUANG.guardSec;
-        this.addFloatingText('破空光剑', player.pos.x, player.pos.y + 74, '#fde68a', 1.5, true, true);
+        if (!isFollowUp) this.addFloatingText('破空光剑', player.pos.x, player.pos.y + 74, '#fde68a', 1.5, true, true);
         this.triggerZoomPunch(0.02);
 
         // 七道剑痕自左向右一笔笔划过身前（不是绕圈；追加技：九道）
@@ -2640,7 +2640,7 @@ export class GameEngine {
    * → 末剑追加目标已损气血 12% 斩杀伤害。全程 21%~35% 免伤。
    * 七剑走暂停安全调度器：暂停冻结、重开清空，绝不脱离游戏时钟。
    */
-  private executeSevenStarBlade() {
+  private executeSevenStarBlade(isFollowUp: boolean = false) {
     const player = this.player;
     // 释放消耗 3 层印记，余量保留（最高可攒 5 层）
     player.swordIntent = Math.max(0, player.swordIntent - QIXING.triggerStacks);
@@ -2654,12 +2654,32 @@ export class GameEngine {
     );
     player.qixingGuardTimer = QIXING.sequenceSec;
 
+    // 追加技形态：七星（否则六星），并消耗追加技状态
+    const starCount = isFollowUp ? 7 : 6;
+    if (isFollowUp) {
+      player.followUpReady = false;
+      this.emitFollowUp();
+    }
+
     sound.playCalligraphyGong('七星光芒剑');
-    this.addFloatingText('『七星光芒剑』', player.pos.x, player.pos.y + 90, '#fbbf24', 1.7, true, true);
-    this.spawnShockRing(player.pos.x, player.pos.z, 10, 150, 0.5, '#fde68a', 3.5);
-    this.spawnShockRing(player.pos.x, player.pos.z, 6, 96, 0.4, '#ffffff', 4);
-    this.triggerZoomPunch(0.028);
+    this.addFloatingText('『七星光芒剑』', player.pos.x, player.pos.y + 92, '#fbbf24', 1.7, true, true);
+    this.spawnShockRing(player.pos.x, player.pos.z, 8, 120, 0.45, '#fde68a', 3);
+    this.triggerZoomPunch(0.026);
     this.cameraShake = 9;
+
+    // 星芒：贴着自己身体绕成一环绽开（追加技多一颗）
+    for (let i = 0; i < starCount; i++) {
+      const a = -Math.PI / 2 + (i / starCount) * Math.PI * 2;
+      this.spawnInkSlash(
+        player.pos.x + Math.cos(a) * 54,
+        player.pos.y + 34 + Math.sin(a) * 28,
+        player.pos.z,
+        'STAR',
+        player.facing,
+        0.85 + (i % 2) * 0.12,
+        i === starCount - 1 ? '#fde68a' : '#ffffff',
+      );
+    }
 
     const affixMult = this.getAffixDamageMultiplier();
     const gestureMult = this.getGestureDamageMultiplier();
@@ -2719,7 +2739,11 @@ export class GameEngine {
         }
 
         // 末剑：追加目标已损气血 12% 的斩杀伤害
+        // 末剑：击飞 + 斩杀
         if (isLast && target.hp > 0) {
+          target.vel.y = 15;      // 挑飞
+          target.isAirborne = true;
+          target.hitStun = Math.max(target.hitStun, 0.6);
           const missing = Math.max(0, target.maxHp - target.hp);
           const execDmg = Math.max(1, Math.round((missing * QIXING.executePercent) / 100));
           this.damageEnemy(target, execDmg, true, 0.95, true);
@@ -5805,6 +5829,33 @@ export class GameEngine {
           ctx.ellipse(0, 0, R * 0.86, R * 0.36, 0, 0, Math.PI * 2);
           ctx.stroke();
           ctx.setLineDash([]);
+          break;
+        }
+        case 'STAR': {
+          // 星芒：中心光晕 + 交叉四角星（追加技多一颗，环绕己身）
+          const r = R * 0.6;
+          const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.7);
+          glow.addColorStop(0, 'rgba(255,255,255,0.95)');
+          glow.addColorStop(0.45, 'rgba(253,230,138,0.5)');
+          glow.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(0, 0, r * 1.7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          for (const rot of [0, Math.PI / 2]) {
+            ctx.save();
+            ctx.rotate(rot + ease * 0.45);
+            ctx.beginPath();
+            ctx.moveTo(0, -r);
+            ctx.quadraticCurveTo(r * 0.14, -r * 0.14, r, 0);
+            ctx.quadraticCurveTo(r * 0.14, r * 0.14, 0, r);
+            ctx.quadraticCurveTo(-r * 0.14, r * 0.14, -r, 0);
+            ctx.quadraticCurveTo(-r * 0.14, -r * 0.14, 0, -r);
+            ctx.fill();
+            ctx.restore();
+          }
           break;
         }
         case 'DASH': {

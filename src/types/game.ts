@@ -287,7 +287,7 @@ export interface InkSlash {
   y: number;
   z: number;
   facing: 1 | -1;
-  kind: 'THRUST' | 'HORIZONTAL' | 'VERTICAL' | 'LAUNCH' | 'CIRCLE' | 'DASH';
+  kind: 'THRUST' | 'HORIZONTAL' | 'VERTICAL' | 'LAUNCH' | 'CIRCLE' | 'DASH' | 'STAR';
   life: number;
   maxLife: number;
   color: string;
