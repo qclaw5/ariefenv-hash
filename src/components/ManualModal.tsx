@@ -52,11 +52,11 @@ export const ManualModal: React.FC<ManualModalProps> = ({ onClose }) => {
       color: 'text-[#7c3aed] border-[#7c3aed]/40 bg-[#7c3aed]/10',
     },
     {
-      hanzi: '闪',
-      name: '踏影瞬杀',
-      strokeType: '折线闪电「Z」或「乛」',
+      hanzi: '泉',
+      name: '前进喷泉',
+      strokeType: '折线「Z」或「乛」',
       key: 'L 键',
-      desc: '身形化为一道水墨残影穿透敌阵，处于无敌状态，并在敌人身后造成连续裂斩。',
+      desc: '向前冲刺并快速连刺六次，每段造成伤害并回复气血——攻守兼备的续航招。',
       color: 'text-[#b91c1c] border-[#b91c1c]/40 bg-[#b91c1c]/10',
     },
   ];

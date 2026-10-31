@@ -118,9 +118,9 @@ export class GestureRecognizer {
     if (inflectionCount >= 1 && totalLength > 100 && endToEndDist > 70) {
       return {
         type: 'ZIGZAG',
-        name: '踏影瞬杀',
-        hanzi: '闪',
-        desc: '残影穿梭，瞬身斩敌留下水墨裂痕',
+        name: '前进喷泉',
+        hanzi: '泉',
+        desc: '向前冲刺并连刺六次，边打边回气血',
         confidence: 0.91,
         points,
       };

@@ -507,10 +507,10 @@ export const HUD: React.FC<HUDProps> = ({
           <button
             onClick={() => onTriggerMove('ZIGZAG')}
             className="w-10 h-10 sm:w-11 sm:h-11 flex flex-col items-center justify-center bg-[#ded3b8] hover:bg-[#c9b995] active:scale-95 text-[#2b2118] border border-[#b3a181] rounded-lg transition-transform cursor-pointer"
-            title="踏影瞬杀 (快捷键 L / 右屏画闪折「Z」)"
+            title="前进喷泉 (快捷键 L / 右屏画折「Z」)：冲刺连刺六次并回血"
           >
-            <span className="text-sm font-calligraphy text-[#b91c1c]">闪</span>
-            <span className="text-[9px] text-[#85745a]">瞬影[L]</span>
+            <span className="text-sm font-calligraphy text-[#0284c7]">泉</span>
+            <span className="text-[9px] text-[#85745a]">喷泉[L]</span>
           </button>
           </div>
         </div>

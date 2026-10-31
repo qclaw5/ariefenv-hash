@@ -8,7 +8,7 @@ export type GestureType =
   | 'VERTICAL_DOWN' // 劈: 力劈华山
   | 'DIAGONAL_UP'   // 破: 破空光剑
   | 'CIRCLE'        // 圆: 浑元太极
-  | 'ZIGZAG';       // 闪: 踏影瞬杀
+  | 'ZIGZAG';       // 泉: 前进喷泉
 
 export interface GestureResult {
   type: GestureType;

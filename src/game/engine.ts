@@ -2290,9 +2290,9 @@ export class GameEngine {
       hanzi = '圆';
       desc = '墨劲圆转，八卦护体并震退群敌';
     } else if (type === 'ZIGZAG') {
-      name = '踏影瞬杀';
-      hanzi = '闪';
-      desc = '残影穿梭，瞬身斩敌留下水墨裂痕';
+      name = '前进喷泉';
+      hanzi = '泉';
+      desc = '向前冲刺并连刺六次，边打边回气血';
     }
 
     const result: GestureResult = {
@@ -2599,33 +2599,34 @@ export class GameEngine {
       }
 
       case 'ZIGZAG': {
+        // 前进喷泉（夏洛特二技能）：向前冲刺并快速连刺六次，每段造成伤害并回复气血
         player.state = 'ATTACK_DASH';
         player.stateTimer = 0;
-        player.stateDuration = this.poseDur(0.3);
+        player.stateDuration = this.poseDur(0.34);
         player.isInvincible = true;
         player.invincibleTimer = 0.35;
         sound.playDash();
 
-        // Dash forward rapidly piercing enemies（无双闪身距离 220→320：穿越整片怪海）
-        const dashDistance = player.facing * (this.gameMode === 'MUSOU' ? 320 : 220);
+        const dashDistance = player.facing * (this.gameMode === 'MUSOU' ? 320 : 240);
+        const startX = player.pos.x;
         const targetX = player.pos.x + dashDistance;
 
-        // Record dash trail afterimages
+        // 冲刺残影
         for (let i = 0; i < 4; i++) {
           player.dashTrail.push({
-            x: player.pos.x + (dashDistance * i) / 4,
+            x: startX + (dashDistance * i) / 4,
             y: player.pos.y,
             z: player.pos.z,
           });
         }
 
-        // 掠影无踪：闪身路径风刃
+        // 掠影无踪：冲刺路径风刃（词条）
         const hasDashStrike = player.affixes.some((a) => a.stats.dashStrikeEnabled);
         if (hasDashStrike) {
           for (const enemy of this.enemies) {
             if (enemy.hp <= 0) continue;
-            const t = Math.max(0, Math.min(1, (enemy.pos.x - player.pos.x) / (dashDistance || 1)));
-            const px = player.pos.x + dashDistance * t;
+            const t = Math.max(0, Math.min(1, (enemy.pos.x - startX) / (dashDistance || 1)));
+            const px = startX + dashDistance * t;
             if (Math.hypot(enemy.pos.x - px, enemy.pos.z - player.pos.z) < 45) {
               this.damageEnemy(enemy, Math.round(20 * this.getAffixDamageMultiplier()), false, 0.3);
             }
@@ -2634,21 +2635,47 @@ export class GameEngine {
 
         player.pos.x = targetX;
         this.cameraShake = 8;
-
-        // 疾影残风：速度线 + 瞬身剑弧
         this.spawnSpeedLines(player.pos, 14, '#17130f');
-        this.spawnInkSlash(player.pos.x, player.pos.y + 24, player.pos.z, 'DASH', player.facing, 1.15);
+        this.spawnInkSlash(player.pos.x, player.pos.y + 24, player.pos.z, 'DASH', player.facing, 1.05);
 
-        this.performHitCheck({
-          rangeX: 200,
-          rangeZ: 50,
-          damageMultiplier: 2.0,
-          knockbackX: player.facing * 6,
-          knockbackY: 4,
-          isGesture: true,
-          followUp: isFollowUp,
-          gestureType: res.type,
-        });
+        // 六连刺：每段伤害 + 回复气血（每段回最大气血 3%）
+        const healPerThrust = Math.max(2, Math.round(player.maxHp * 0.03));
+        for (let i = 0; i < 6; i++) {
+          this.schedule(i * 0.055, () => {
+            if (this.runEnded || player.hp <= 0) return;
+            this.spawnInkSlash(
+              player.pos.x + player.facing * (18 + i * 7),
+              player.pos.y + 22,
+              player.pos.z,
+              'THRUST',
+              player.facing,
+              0.62 + i * 0.03,
+              '#7dd3fc',
+            );
+            this.performHitCheck({
+              rangeX: 130,
+              rangeZ: 48,
+              damageMultiplier: 0.85,
+              knockbackX: player.facing * 3,
+              knockbackY: 1,
+              isGesture: true,
+              followUp: isFollowUp,
+              gestureType: res.type,
+            });
+            // 回血（喷泉之息）
+            if (player.hp > 0) {
+              const before = player.hp;
+              player.hp = Math.min(player.maxHp, player.hp + healPerThrust);
+              const healed = Math.round(player.hp - before);
+              if (healed > 0) {
+                this.emitHp();
+                this.addFloatingText(`+${healed}`, player.pos.x, player.pos.y + 46, '#4ade80', 0.95);
+              }
+            }
+            sound.playSlash('light');
+            this.cameraShake = Math.max(this.cameraShake, 4);
+          });
+        }
 
         // Phantom chain affix check
         const hasPhantomChain = player.affixes.some((a) => a.stats.flashCooldownReset);
@@ -4068,7 +4095,7 @@ export class GameEngine {
         enemy.attackCooldown -= dt * slowFactor;
       }
 
-      // Face player（墨盾武僧转身迟缓：0.55s 一转，配合踏影瞬杀留出绕背破防窗口）
+      // Face player（墨盾武僧转身迟缓：0.55s 一转，配合前进喷泉穿身留出绕背破防窗口）
       if (enemy.type === 'INK_SHIELD_GUARD') {
         enemy.turnCooldown = (enemy.turnCooldown ?? 0) - dt;
         if ((enemy.turnCooldown ?? 0) <= 0) {
@@ -4835,7 +4862,7 @@ export class GameEngine {
           const cdz = player.pos.z - boss.pos.z;
           if (Math.hypot(cdx, cdz) < 52) {
             boss.bossChargeHit = true;
-            this.hurtPlayer(Math.round(boss.damage * 1.1), player.pos.x >= boss.pos.x ? 1 : -1, boss);
+            this.hurtPlayer(Math.round(boss.damage * 1.1), player.pos.x >= boss.pos.x ? 1 : -1, boss, true); // 冲锋撞击：控制
             this.addFloatingText('墨刃突进', boss.pos.x, boss.pos.y + 70, '#ef4444', 1.4, true);
             // 命中顿帧 + 溅墨
             this.spawnInkBurst(player.pos, 12, '#5c1d1d');
@@ -4943,7 +4970,7 @@ export class GameEngine {
       this.spawnShockRing(cx, cz, 6, 95, 0.45, '#1a1611', 3);
       this.triggerZoomPunch(0.042);
       if (Math.hypot(player.pos.x - cx, player.pos.z - cz) < cr) {
-        this.hurtPlayer(Math.round(boss.damage * 1.2), player.pos.x >= cx ? 1 : -1, boss);
+        this.hurtPlayer(Math.round(boss.damage * 1.2), player.pos.x >= cx ? 1 : -1, boss, true); // 震岳一击：控制
         this.addFloatingText('震岳一击', cx, 60, '#ef4444', 1.5, true);
       }
     } else if (skill === 'INK_VOLLEY') {
@@ -5029,7 +5056,7 @@ export class GameEngine {
     }
   }
 
-  private hurtPlayer(amount: number, fromFacing: 1 | -1, source?: EnemyEntity) {
+  private hurtPlayer(amount: number, fromFacing: 1 | -1, source?: EnemyEntity, control: boolean = false) {
     const player = this.player;
     if (player.isInvincible || player.hp <= 0 || this.runEnded) return;
 
@@ -5099,18 +5126,20 @@ export class GameEngine {
       this.spawnInkBurst(source.pos, 4, '#a855f7');
     }
 
-    // 霸体：破空光剑期间不被打断（不吃硬直/击退），仅掉血
-    if (!superArmor) {
+    // 主角只有在「被控制」时才会僵直（普通命中只掉血，不打断动作）
+    if (control && !superArmor) {
       player.state = 'HURT';
       player.stateTimer = 0;
       player.stateDuration = 0.25;
       player.vel.x = fromFacing * 8;
       player.isInvincible = true;
       player.invincibleTimer = 0.65;
+      this.addFloatingText('僵直', player.pos.x, player.pos.y + 66, '#ef4444', 1.1);
     } else {
+      // 不僵直：仅给极短无敌帧，防同一帧多段结算重复扣血
       player.isInvincible = true;
-      player.invincibleTimer = Math.max(player.invincibleTimer, 0.14);
-      this.addFloatingText('霸体', player.pos.x, player.pos.y + 66, '#fde68a', 1.1);
+      player.invincibleTimer = Math.max(player.invincibleTimer, 0.16);
+      if (superArmor) this.addFloatingText('霸体', player.pos.x, player.pos.y + 66, '#fde68a', 1.1);
     }
     this.cameraShake = 10;
     this.hurtFlashTimer = 0.4;
