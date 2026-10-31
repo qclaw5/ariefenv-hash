@@ -36,6 +36,8 @@ interface HUDProps {
   /** 被动·七星光芒剑：印记层数（满层下次技能升格七段追击斩） */
   swordIntent: number;
   swordIntentMax: number;
+  /** 可用七星的层数门槛（3 层） */
+  swordIntentThreshold: number;
   /** 追加技待发 */
   followUpReady: boolean;
   controlMode: ControlMode;
@@ -73,6 +75,7 @@ export const HUD: React.FC<HUDProps> = ({
   awakeningMax,
   swordIntent,
   swordIntentMax,
+  swordIntentThreshold,
   followUpReady,
   controlMode,
   onToggleControlMode,
@@ -87,7 +90,7 @@ export const HUD: React.FC<HUDProps> = ({
   const shieldPercent = shieldMax > 0 ? Math.max(0, Math.min(100, (shield / shieldMax) * 100)) : 0;
   const awakeningPercent = awakeningMax > 0 ? Math.max(0, Math.min(100, (awakening / awakeningMax) * 100)) : 0;
   const isAwakenReady = awakening >= awakeningMax;
-  const isQixingReady = swordIntentMax > 0 && swordIntent >= swordIntentMax;
+  const isQixingReady = swordIntent >= swordIntentThreshold && swordIntentThreshold > 0;
   const isLowHp = hp > 0 && hpPercent <= 30;
 
   return (
@@ -398,7 +401,7 @@ export const HUD: React.FC<HUDProps> = ({
 
         {/* Right unified action cluster: 跃/觉 + 六技能（触屏端隐藏「刺」——右屏轻点即刺，7 键防窄屏溢出） */}
         <div className="ml-auto flex flex-col items-end gap-1.5">
-          {/* 被动 buff 条（王者式：置于技能键正上方）：七星印记 3 层 + 追加技待发 */}
+          {/* 被动 buff 条（王者式：置于技能键正上方）：印记 5 层上限 / 3 层可用 + 追加技待发 */}
           <div className="pointer-events-none flex items-center gap-1.5">
             <div
               className={`flex items-center gap-1 px-2 py-1 rounded-lg border shadow-sm ${
@@ -406,7 +409,7 @@ export const HUD: React.FC<HUDProps> = ({
                   ? 'bg-[#fbbf24]/30 border-[#b45309] shadow-[0_0_12px_rgba(251,191,36,0.6)] animate-pulse'
                   : 'bg-[#f1ead7]/85 border-[#b3a181]'
               }`}
-              title="七星光芒剑：招式命中叠印记（4 秒内续击可叠），三层圆满后下一次技能升格为七段追击斩"
+              title="七星光芒剑：招式命中叠印记（4 秒内续击可叠，最多 5 层），满 3 层后下一次技能升格为七段追击斩（消耗 3 层）"
             >
               <span className={`text-[9px] font-ink-serif ${isQixingReady ? 'text-[#92400e] font-bold' : 'text-[#85745a]'}`}>
                 {isQixingReady ? '七星' : '印记'}

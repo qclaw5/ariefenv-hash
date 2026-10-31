@@ -48,9 +48,10 @@ export default function App() {
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [awakening, setAwakening] = useState<number>(0);
   const [awakeningMax, setAwakeningMax] = useState<number>(100);
-  // 被动·七星光芒剑：印记层数（0~5）与追加技待发
+  // 被动·七星光芒剑：印记层数（上限 5，达 3 层可用）与追加技待发
   const [swordIntent, setSwordIntent] = useState<number>(0);
   const [swordIntentMax, setSwordIntentMax] = useState<number>(5);
+  const [swordIntentThreshold, setSwordIntentThreshold] = useState<number>(3);
   const [followUpReady, setFollowUpReady] = useState<boolean>(false);
 
   // 波次大字横幅
@@ -152,9 +153,10 @@ export default function App() {
         setAwakening(value);
         setAwakeningMax(maxValue);
       },
-      onSwordIntentChange: (stacks, maxStacks) => {
+      onSwordIntentChange: (stacks, maxStacks, triggerStacks) => {
         setSwordIntent(stacks);
         setSwordIntentMax(maxStacks);
+        setSwordIntentThreshold(triggerStacks);
       },
       onFollowUpChange: (ready) => {
         setFollowUpReady(ready);
@@ -438,6 +440,7 @@ export default function App() {
           awakeningMax={awakeningMax}
           swordIntent={swordIntent}
           swordIntentMax={swordIntentMax}
+          swordIntentThreshold={swordIntentThreshold}
           followUpReady={followUpReady}
           controlMode={controlMode}
           onToggleControlMode={handleToggleControlMode}

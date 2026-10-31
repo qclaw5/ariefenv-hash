@@ -111,7 +111,8 @@ const MUSOU_TUNING = {
  * 末剑追加目标已损气血 12% 的斩杀伤害，释放期间获得 21%~35% 免伤。
  */
 const QIXING = {
-  maxStacks: 3,            // 七星印记上限（三层圆满，下一次技能升格）
+  maxStacks: 5,            // 印记上限（最多叠 5 层）
+  triggerStacks: 3,        // 满 3 层即可释放七星光芒剑（释放消耗 3 层，余量保留）
   stackWindowSec: 4,       // 剑意持续（秒）
   hits: 7,                 // 七段斩击
   hitDmgMult: 0.62,        // 每段伤害 = 基础 24 × 该系数（总倍率约 4.34）
@@ -186,8 +187,8 @@ export interface GameEngineCallbacks {
   onControlModeChange?: (mode: ControlMode) => void;
   /** 觉醒槽变化（0~100，满槽可释放「万墨归宗」） */
   onAwakeningChange?: (value: number, maxValue: number) => void;
-  /** 印记层数变化（被动·七星光芒剑：0~5，满层下次技能升格） */
-  onSwordIntentChange?: (stacks: number, maxStacks: number) => void;
+  /** 印记层数变化（0~5，达 3 层即可用七星光芒剑） */
+  onSwordIntentChange?: (stacks: number, maxStacks: number, triggerStacks: number) => void;
   /** 追加技待发状态变化（命中后其他招式强化） */
   onFollowUpChange?: (ready: boolean) => void;
   /** 自动存档：暂停时 / 每折开战时触发，App 层落盘 localStorage */
@@ -1020,7 +1021,7 @@ export class GameEngine {
     const val = this.player.swordIntent;
     if (!force && val === this.lastSwordIntentEmitted) return;
     this.lastSwordIntentEmitted = val;
-    this.callbacks.onSwordIntentChange(val, QIXING.maxStacks);
+    this.callbacks.onSwordIntentChange(val, QIXING.maxStacks, QIXING.triggerStacks);
   }
 
   /** 招式命中叠一层印记（4 秒不续则清零；三层圆满后下一技能升格七星光芒剑） */
@@ -1028,14 +1029,14 @@ export class GameEngine {
     const player = this.player;
     if (this.qixingActive || player.hp <= 0) return;
     if (player.swordIntent >= QIXING.maxStacks) {
-      // 已满层：只续时间，不再溢出（等玩家打出七星）
+      // 已达上限：只续时间，不再溢出（等玩家打出七星）
       player.swordIntentTimer = QIXING.stackWindowSec;
       return;
     }
     player.swordIntent += 1;
     player.swordIntentTimer = QIXING.stackWindowSec;
     this.emitSwordIntent();
-    const full = player.swordIntent >= QIXING.maxStacks;
+    const full = player.swordIntent >= QIXING.triggerStacks;
     this.addFloatingText(
       full ? '七星圆满 · 待发' : `印记 ${player.swordIntent}/${QIXING.maxStacks}`,
       player.pos.x,
@@ -1051,9 +1052,9 @@ export class GameEngine {
     }
   }
 
-  /** 印记是否已满（下一次技能可升格为七星光芒剑） */
+  /** 印记是否达 3 层（下一次技能可升格为七星光芒剑） */
   private get swordIntentReady(): boolean {
-    return !this.qixingActive && this.player.swordIntent >= QIXING.maxStacks && this.player.hp > 0;
+    return !this.qixingActive && this.player.swordIntent >= QIXING.triggerStacks && this.player.hp > 0;
   }
 
   /** 追加技待发同步 UI（王者式：显示在技能键上方） */
@@ -2641,8 +2642,9 @@ export class GameEngine {
    */
   private executeSevenStarBlade() {
     const player = this.player;
-    player.swordIntent = 0;
-    player.swordIntentTimer = 0;
+    // 释放消耗 3 层印记，余量保留（最高可攒 5 层）
+    player.swordIntent = Math.max(0, player.swordIntent - QIXING.triggerStacks);
+    player.swordIntentTimer = player.swordIntent > 0 ? QIXING.stackWindowSec : 0;
     this.emitSwordIntent(true);
 
     this.qixingActive = true;
