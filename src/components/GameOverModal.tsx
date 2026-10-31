@@ -7,7 +7,6 @@ import React from 'react';
 import { RotateCcw, Award, Skull, Infinity as InfinityIcon, Crown, Swords, Zap, Timer, ScrollText, Feather } from 'lucide-react';
 import { RunStats } from '../types/game';
 import { formatDuration } from '../utils/storage';
-import inkSeal from '@/src/assets/images/title_seal.png';
 
 interface GameOverModalProps {
   stats: RunStats;
@@ -73,13 +72,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
       <div className="max-w-md w-full bg-[#f4eedd] border border-[#b3a181] rounded-2xl p-7 shadow-2xl relative flex flex-col items-center text-center max-h-[92vh] overflow-y-auto">
         {/* Chinese Seal Stamp Graphic */}
         <div className="relative mb-4">
-          <div className="w-20 h-20 rounded-xl overflow-hidden border-2 border-[#b91c1c] shadow-lg">
-            <img
-              src={inkSeal}
-              alt="墨武印章"
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
+          <div className="w-20 h-20 rounded-xl overflow-hidden border-2 border-[#b91c1c] shadow-lg bg-[#b91c1c] flex items-center justify-center">
+            <span className="font-calligraphy text-[#fef3c7] text-xl leading-tight tracking-widest">
+              墨武
+            </span>
           </div>
           {isVictory && (
             <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-[#b45309] rounded-full flex items-center justify-center border-2 border-[#f4eedd]">

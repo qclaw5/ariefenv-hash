@@ -1,4 +1,3 @@
-import inkSeal from '@/src/assets/images/title_seal.png';
 /**
  * Game Title Screen / Main Menu
  * v2: 历史战绩展示（最高分/最远折数/累计击杀/问鼎次数）
@@ -31,13 +30,10 @@ export const TitleMenu: React.FC<TitleMenuProps> = ({ onStart, onOpenManual, onO
     <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 select-none overflow-y-auto">
       <div className="max-w-xl w-full bg-[#f4eedd] border border-[#b3a181] rounded-2xl p-7 sm:p-9 shadow-2xl relative flex flex-col items-center text-center my-auto">
         {/* Decorative Seal Icon（字体渲染的朱砂印章） */}
-        <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-[#b3a181] shadow-xl mb-4 shadow-[#8a6a3a]/20">
-          <img
-            src={inkSeal}
-            alt="墨痕武道"
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
+        <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-[#b91c1c] shadow-xl mb-4 bg-[#b91c1c] flex items-center justify-center">
+          <span className="font-calligraphy text-[#fef3c7] text-2xl leading-tight tracking-widest text-center">
+            墨痕<br />武道
+          </span>
         </div>
 
         {/* Title */}

@@ -2487,11 +2487,10 @@ export class GameEngine {
             if (this.runEnded || player.hp <= 0) return;
             const isFirst = i === 0;
             const isLast = i === blades - 1;
-            // 落笔位置沿一条横带推进：左 → 右，纵深轻微错开避免叠成一条线
+            // 原地落笔：七道剑痕都画在自己身上，仅轻微错位避免完全重叠
             const t01 = blades > 1 ? i / (blades - 1) : 0.5;
-            const sweepX = (-1 + t01 * 2) * 92;
-            const ox = player.facing * (36 + Math.abs(sweepX) * 0.12);
-            const oz = sweepX * 0.52;
+            const ox = player.facing * (12 + (i % 2) * 12 + t01 * 6);
+            const oz = -26 + t01 * 52;
 
             // 每道都是一笔直线剑痕（不用弧光，避免看起来像画圈）
             this.spawnInkSlash(
