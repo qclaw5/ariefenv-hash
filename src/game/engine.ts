@@ -254,6 +254,8 @@ export class GameEngine {
 
   // --- 特效增强子系统 ---
   private inkSlashes: InkSlash[] = [];      // 笔刷剑弧
+  /** 七角星剑阵（七星/破空）：贴身绘制，画在角色身上 */
+  private starSigils: { x: number; y: number; z: number; life: number; maxLife: number; size: number; color: string }[] = [];
   private groundDecals: GroundDecal[] = []; // 地面墨渍/地裂
   private shockRings: ShockRing[] = [];     // 冲击激波环
   private slowMotionTimer: number = 0;      // 电影化慢动作剩余
@@ -837,6 +839,7 @@ export class GameEngine {
     this.dashGhosts = [];
     this.activeStroke = [];
     this.inkSlashes = [];
+    this.starSigils = [];
     this.groundDecals = [];
     this.shockRings = [];
     this.clearScheduled();
@@ -917,6 +920,7 @@ export class GameEngine {
     this.pendingSlam = null;
     this.pendingCharge = null;
     this.inkSlashes = [];
+    this.starSigils = [];
     this.groundDecals = [];
     this.shockRings = [];
     this.slowMotionTimer = 0;
@@ -2465,20 +2469,15 @@ export class GameEngine {
         if (!isFollowUp) this.addFloatingText('破空光剑', player.pos.x, player.pos.y + 74, '#fde68a', 1.5, true, true);
         this.triggerZoomPunch(0.02);
 
-        // 星芒：贴着自己身体绕成一环绽开（六星，追加技七星）
-        const starCount = isFollowUp ? 7 : 6;
-        for (let i = 0; i < starCount; i++) {
-          const a = -Math.PI / 2 + (i / starCount) * Math.PI * 2;
-          this.spawnInkSlash(
-            player.pos.x + Math.cos(a) * 52,
-            player.pos.y + 34 + Math.sin(a) * 26,
-            player.pos.z,
-            'STAR',
-            player.facing,
-            0.85 + (i % 2) * 0.12,
-            i === starCount - 1 ? '#fde68a' : '#ffffff',
-          );
-        }
+        // 七角星剑阵：起手在自己身上画出七角星（追加技更大更亮，剑痕成形后爆发）
+        this.spawnStarSigil(
+          player.pos.x,
+          player.pos.y + 42,
+          player.pos.z,
+          isFollowUp ? 1.5 : 1.25,
+          isFollowUp ? '#fbbf24' : '#fde68a',
+          isFollowUp ? 1.15 : 1.0,
+        );
 
         // 七道剑痕自左向右一笔笔划过身前（不是绕圈；追加技：九道）
         const blades = isFollowUp ? POKUANG.bladesFollowUp : POKUANG.blades;
@@ -2535,7 +2534,12 @@ export class GameEngine {
                   e.hitStun = Math.max(e.hitStun, 0.6);
                 }
               }
-              this.cameraShake = 12;
+              // 剑痕成形 → 破空光剑爆发（追加技更盛）
+              this.spawnShockRing(player.pos.x, player.pos.z, 10, isFollowUp ? 210 : 170, 0.55, '#ffffff', 4);
+              this.spawnShockRing(player.pos.x, player.pos.z, 6, isFollowUp ? 150 : 120, 0.4, '#fde68a', 3);
+              this.triggerZoomPunch(isFollowUp ? 0.045 : 0.03);
+              this.addFloatingText(isFollowUp ? '破空光剑 · 爆发' : '破空', player.pos.x, player.pos.y + 96, '#fde68a', 1.5, true, true);
+              this.cameraShake = 14;
             } else {
               this.cameraShake = Math.max(this.cameraShake, 3);
             }
@@ -2730,6 +2734,9 @@ export class GameEngine {
     this.spawnShockRing(player.pos.x, player.pos.z, 8, 120, 0.45, '#fde68a', 3);
     this.triggerZoomPunch(0.026);
     this.cameraShake = 9;
+
+    // 七角星剑阵：在主人身上画出七角星
+    this.spawnStarSigil(player.pos.x, player.pos.y + 42, player.pos.z, 1.05, '#fde68a', 1.05);
 
     const affixMult = this.getAffixDamageMultiplier();
     const gestureMult = this.getGestureDamageMultiplier();
@@ -3495,6 +3502,12 @@ export class GameEngine {
   }
 
   /** 生成一笔水墨剑弧（招式专属挥砍特效） */
+  /** 七角星剑阵：在角色身上画出七角星（{7/3} 星形连线 + 七枚光点） */
+  private spawnStarSigil(x: number, y: number, z: number, size: number = 1, color: string = '#fde68a', life: number = 1.0) {
+    this.starSigils.push({ x, y, z, life, maxLife: life, size, color });
+    if (this.starSigils.length > 3) this.starSigils.shift();
+  }
+
   private spawnInkSlash(x: number, y: number, z: number, kind: InkSlash['kind'], facing: 1 | -1, size: number = 1, color: string = '#1c1712') {
     this.inkSlashes.push({
       id: Math.random().toString(),
@@ -3792,6 +3805,14 @@ export class GameEngine {
     }
     // 七星免伤计时
     if (player.qixingGuardTimer > 0) player.qixingGuardTimer -= dt;
+    // 七角星剑阵衰减
+    if (this.starSigils.length > 0) {
+      for (let i = this.starSigils.length - 1; i >= 0; i--) {
+        this.starSigils[i].life -= dt;
+        if (this.starSigils[i].life <= 0) this.starSigils.splice(i, 1);
+      }
+    }
+
     // 七星看门狗：连斩被打断（调度被清空等）时强制解锁，避免印记永久封死
     if (this.qixingActive && player.qixingGuardTimer <= 0) {
       this.qixingActive = false;
@@ -5559,6 +5580,7 @@ export class GameEngine {
 
     // 4.5 笔刷剑弧：招式专属挥砍特效
     this.renderInkSlashes(ctx);
+    this.renderStarSigils(ctx);
 
     // 5. Ink Splatter Particles（多形态渲染：墨滴/拖尾/墨魂/墨瓣/速度线；内联投影 + 屏外剔除，零分配）
     for (const part of this.particles) {
@@ -5952,6 +5974,85 @@ export class GameEngine {
       ctx.globalAlpha = 1.0;
       ctx.restore();
     }
+  }
+
+  /** 七角星剑阵渲染：画在角色身上的七角星（白金笔触 + 旋转 + 光点） */
+  private renderStarSigils(ctx: CanvasRenderingContext2D) {
+    if (this.starSigils.length === 0) return;
+    for (const s of this.starSigils) {
+      const pr = this.projectXYZ(s.x, s.y, s.z);
+      if (pr.sx < -300 || pr.sx > this.screenWidth + 300) continue;
+      const t = 1 - Math.max(0, s.life) / s.maxLife;
+      const alpha = Math.sin(Math.min(1, t) * Math.PI) * 0.95;
+      if (alpha <= 0.02) continue;
+      const R = 86 * s.size * pr.scale * (0.55 + 0.45 * (1 - Math.pow(1 - t, 3)));
+      const spin = t * 1.5;
+
+      ctx.save();
+      ctx.translate(pr.sx, pr.sy);
+      ctx.scale(pr.scale, pr.scale);
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+
+      const px: number[] = [];
+      const py: number[] = [];
+      for (let i = 0; i < 7; i++) {
+        const a = -Math.PI / 2 + (i / 7) * Math.PI * 2 + spin * 0.5;
+        px.push(Math.cos(a) * R);
+        py.push(Math.sin(a) * R);
+      }
+
+      // 墨晕（宽而淡）
+      ctx.globalAlpha = alpha * 0.22;
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 11 * s.size;
+      ctx.beginPath();
+      for (let i = 0; i <= 7; i++) {
+        const k = (i * 3) % 7;
+        if (i === 0) ctx.moveTo(px[k], py[k]);
+        else ctx.lineTo(px[k], py[k]);
+      }
+      ctx.stroke();
+
+      // 主笔（锐利星线）
+      ctx.globalAlpha = alpha * 0.95;
+      ctx.lineWidth = 3.2 * s.size;
+      ctx.stroke();
+
+      // 金锋描边
+      ctx.globalAlpha = alpha * 0.7;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.2 * s.size;
+      ctx.stroke();
+
+      // 七枚光点
+      for (let i = 0; i < 7; i++) {
+        ctx.globalAlpha = alpha * 0.95;
+        ctx.fillStyle = '#fff7d6';
+        ctx.beginPath();
+        ctx.arc(px[i], py[i], 3.4 * s.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.strokeStyle = '#fde68a';
+        ctx.lineWidth = 1 * s.size;
+        ctx.beginPath();
+        ctx.arc(px[i], py[i], 7 * s.size, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // 中心光核
+      ctx.globalAlpha = alpha * 0.45;
+      const core = ctx.createRadialGradient(0, 0, 0, 0, 0, R * 0.42);
+      core.addColorStop(0, 'rgba(255,255,255,0.9)');
+      core.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = core;
+      ctx.beginPath();
+      ctx.arc(0, 0, R * 0.42, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
   }
 
   /** 慢动作电影墨帘（上下渐变黑墨压边；离屏预烘焙，运行时仅两次缩放 drawImage） */
