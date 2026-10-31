@@ -115,7 +115,7 @@ const QIXING = {
   stackWindowSec: 4,       // 剑意持续（秒）
   hits: 7,                 // 七段斩击
   hitDmgMult: 0.62,        // 每段伤害 = 基础 24 × 该系数（总倍率约 4.34）
-  hitIntervalSec: 0.062,   // 段间间隔（0.43 秒内七剑落尽）
+  hitIntervalSec: 0.14,    // 段间间隔（七剑约 1 秒落尽）
   slowPercent: 20,         // 每段附带减速 20%
   slowSec: 2.2,            // 减速持续
   cripplePerStack: 10,     // 伤残：每层减攻速 10%
@@ -125,7 +125,7 @@ const QIXING = {
   guardBase: 21,           // 释放期间免伤下限
   guardMax: 35,            // 释放期间免伤上限（随折数成长）
   guardPerWave: 1.2,       // 每折成长
-  sequenceSec: 0.62,       // 免伤覆盖时长（覆盖整段七剑）
+  sequenceSec: 1.05,       // 免伤覆盖时长（覆盖整段七剑）
   lockRange: 340,          // 锁敌半径
 };
 
@@ -237,8 +237,6 @@ export class GameEngine {
   private qixingGuardPercent: number = QIXING.guardBase;
   private lastSwordIntentEmitted: number = -1;
   private lastFollowUpEmitted: boolean = false;
-  /** 七星法阵（浮生妄·巫女剑阵）：中心点 / 剩余时长 / 已点亮剑数 */
-  private qixingSigil: { x: number; z: number; life: number; maxLife: number; hits: number } | null = null;
   /** 破空光剑：霸体 + 30% 免伤窗口剩余时间 */
   private pokuangTimer: number = 0;
 
@@ -859,7 +857,6 @@ export class GameEngine {
     this.lastSwordIntentEmitted = -1;
     this.lastFollowUpEmitted = true; // 先置 true 再 emit，保证 UI 收到「追加技失效」
     this.emitFollowUp();
-    this.qixingSigil = null;
     this.pokuangTimer = 0;
 
     this.wave = snap.wave;
@@ -943,7 +940,6 @@ export class GameEngine {
     this.lastSwordIntentEmitted = -1;
     this.lastFollowUpEmitted = true; // 先置 true 再 emit，保证 UI 收到「追加技失效」
     this.emitFollowUp();
-    this.qixingSigil = null;
     this.pokuangTimer = 0;
     this.hurtFlashTimer = 0;
     this.runStats = {
@@ -2459,20 +2455,16 @@ export class GameEngine {
             const ang = (i / blades) * Math.PI * 2;
             const ox = Math.cos(ang) * 46;
             const oz = Math.sin(ang) * 30;
-            // 只首道与末道绽放星芒，其余为简练斩痕（大招特效不堆叠）
-            if (i === 0 || i === blades - 1) {
-              this.spawnInkSlash(
-                player.pos.x + ox,
-                player.pos.y + 24,
-                player.pos.z + oz,
-                'QIXING',
-                player.facing,
-                i === 0 ? 1.15 : 0.95,
-                i === 0 ? '#fde68a' : '#e2e8f0',
-              );
-            } else {
-              this.spawnInkSlash(player.pos.x + ox, player.pos.y + 22, player.pos.z + oz, 'VERTICAL', player.facing, 0.55, '#e2e8f0');
-            }
+            // 七道剑痕：交错横竖笔触，首末道更亮（不堆叠特效）
+            this.spawnInkSlash(
+              player.pos.x + ox,
+              player.pos.y + 24,
+              player.pos.z + oz,
+              i % 2 === 0 ? 'VERTICAL' : 'HORIZONTAL',
+              player.facing,
+              i === 0 || i === blades - 1 ? 1.0 : 0.62,
+              i === 0 || i === blades - 1 ? '#fde68a' : '#e2e8f0',
+            );
             // 首道全额，其后每道仅 30% 伤害
             this.performHitCheck({
               rangeX: POKUANG.radiusX,
@@ -2664,16 +2656,6 @@ export class GameEngine {
     this.triggerZoomPunch(0.028);
     this.cameraShake = 9;
 
-    // 浮生妄式巫女剑阵：以首个目标为阵心，随七剑推进点亮符位
-    const first = this.findSevenStarTarget();
-    this.qixingSigil = {
-      x: first ? first.pos.x : player.pos.x + player.facing * 60,
-      z: first ? first.pos.z : player.pos.z,
-      life: QIXING.hits * QIXING.hitIntervalSec + 0.55,
-      maxLife: QIXING.hits * QIXING.hitIntervalSec + 0.55,
-      hits: 0,
-    };
-
     const affixMult = this.getAffixDamageMultiplier();
     const gestureMult = this.getGestureDamageMultiplier();
     const chainMult = this.gameMode === 'MUSOU' ? this.chainDmgMult : 1;
@@ -2704,28 +2686,15 @@ export class GameEngine {
         player.stateTimer = 0;
         player.stateDuration = this.poseDur(0.12);
 
-        // 首剑与末剑绽放七星光阵剑光，中间六剑只用一道清亮斩痕（避免满屏重复星芒）
-        if (i === 0 || isLast) {
-          this.spawnInkSlash(
-            target.pos.x,
-            target.pos.y + 26,
-            target.pos.z,
-            'QIXING',
-            player.facing,
-            isLast ? 1.5 : 1.05,
-            isLast ? '#fde68a' : '#f8fafc',
-          );
+        // 七剑：前六剑为递进的常规剑光，末剑换成一记更大更亮的白光重斩
+        if (isLast) {
+          this.spawnInkSlash(target.pos.x, target.pos.y + 26, target.pos.z, 'HORIZONTAL', player.facing, 2.4, '#ffffff');
+          this.spawnInkSlash(target.pos.x, target.pos.y + 34, target.pos.z, 'VERTICAL', player.facing, 1.9, '#ffffff');
         } else {
-          this.spawnInkSlash(target.pos.x, target.pos.y + 24, target.pos.z, 'THRUST', player.facing, 0.62, '#f1f5f9');
+          const kind = i % 2 === 0 ? 'HORIZONTAL' : 'VERTICAL';
+          this.spawnInkSlash(target.pos.x, target.pos.y + 24, target.pos.z, kind, player.facing, 0.8 + i * 0.07, '#f8fafc');
         }
-        this.spawnInkBurst(target.pos, isLast ? 12 : 3, isLast ? '#fde68a' : '#e2e8f0');
-
-        // 剑阵随目标移动，并点亮第 i+1 个符位
-        if (this.qixingSigil) {
-          this.qixingSigil.x = target.pos.x;
-          this.qixingSigil.z = target.pos.z;
-          this.qixingSigil.hits = i + 1;
-        }
+        this.spawnInkBurst(target.pos, isLast ? 16 : 3, isLast ? '#ffffff' : '#e2e8f0');
 
         // 每段伤害：基础 24 × 0.62 × 词条 × 手势（无双再叠连招链）
         const raw = 24 * QIXING.hitDmgMult * affixMult * gestureMult * chainMult;
@@ -3751,11 +3720,6 @@ export class GameEngine {
     if (player.qixingGuardTimer > 0) player.qixingGuardTimer -= dt;
     // 破空光剑霸体计时
     if (this.pokuangTimer > 0) this.pokuangTimer -= dt;
-    // 七星法阵消散
-    if (this.qixingSigil) {
-      this.qixingSigil.life -= dt;
-      if (this.qixingSigil.life <= 0) this.qixingSigil = null;
-    }
 
     // Dash trail decay
     if (player.dashTrail.length > 0 && Math.random() < 0.2) {
@@ -5184,7 +5148,6 @@ export class GameEngine {
     // 2.5 地面水墨留痕层（实体之下）：溅墨渍 / 地裂 / 冲击激波环
     this.renderGroundDecals(ctx);
     this.renderShockRings(ctx);
-    this.renderQixingSigil(ctx);
 
     // Gather all renderable elements for Z-sorting（队列复用，仅清空长度）
     const renderQueue = this.renderQueue;
@@ -5653,106 +5616,6 @@ export class GameEngine {
     this.renderInkEdge(ctx, w, h);
   }
 
-  /**
-   * 七星光阵（永昼 · 圣白金）：白金七芒星 + 双层光轮 + 光符节点依次点亮，
-   * 收剑瞬间白光十字爆开。整层绘制在实体之下（贴地伪3D压扁）。
-   */
-  private renderQixingSigil(ctx: CanvasRenderingContext2D) {
-    const s = this.qixingSigil;
-    if (!s) return;
-    const pr = this.projectXYZ(s.x, 0, s.z);
-    if (pr.sx < -260 || pr.sx > this.screenWidth + 260) return;
-    const t = 1 - Math.max(0, s.life) / s.maxLife; // 0→1 展开进度
-    const fade = s.life < 0.22 ? Math.max(0, s.life / 0.22) : 1;
-    const R = 112 * pr.scale;
-    const spin = t * 1.5;
-
-    ctx.save();
-    ctx.translate(pr.sx, pr.groundY);
-    ctx.scale(1, 0.42); // 贴地压扁（伪3D）
-
-    // 外层圣光晕（白金柔光）
-    ctx.globalAlpha = 0.26 * fade;
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 11 * pr.scale;
-    ctx.beginPath();
-    ctx.arc(0, 0, R * 1.16, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // 双层光轮
-    ctx.globalAlpha = 0.7 * fade;
-    ctx.strokeStyle = '#fde68a';
-    ctx.lineWidth = 2.4 * pr.scale;
-    ctx.beginPath();
-    ctx.arc(0, 0, R, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 0.5 * fade;
-    ctx.setLineDash([R * 0.3, R * 0.16]);
-    ctx.lineDashOffset = -spin * R * 0.9;
-    ctx.beginPath();
-    ctx.arc(0, 0, R * 0.78, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // 七芒星轮廓：以七段短弧勾勒，避免直棒感
-    const px: number[] = [];
-    const py: number[] = [];
-    for (let i = 0; i < 7; i++) {
-      const a = -Math.PI / 2 + (i / 7) * Math.PI * 2 + spin * 0.35;
-      px.push(Math.cos(a) * R * 0.92);
-      py.push(Math.sin(a) * R * 0.92);
-      ctx.globalAlpha = 0.6 * fade;
-      ctx.strokeStyle = '#fbbf24';
-      ctx.lineWidth = 2 * pr.scale;
-      ctx.beginPath();
-      ctx.arc(0, 0, R * 0.92, a - 0.16, a + 0.16);
-      ctx.stroke();
-    }
-    // 光符节点：随每一剑依次点亮
-    for (let i = 0; i < 7; i++) {
-      const lit = i < s.hits;
-      ctx.globalAlpha = (lit ? 1 : 0.35) * fade;
-      ctx.fillStyle = lit ? '#fff7d6' : '#cfc3a6';
-      ctx.beginPath();
-      ctx.arc(px[i], py[i], (lit ? 5.6 : 3.2) * pr.scale, 0, Math.PI * 2);
-      ctx.fill();
-      if (lit) {
-        ctx.globalAlpha = 0.55 * fade;
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.2 * pr.scale;
-        ctx.beginPath();
-        ctx.arc(px[i], py[i], 10 * pr.scale, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    }
-
-    // 收剑：圣光十字爆开（永昼式白金光爆）
-    if (t > 0.78) {
-      const k = Math.min(1, (t - 0.78) / 0.22);
-      ctx.globalAlpha = (1 - k) * fade;
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 6 * pr.scale * (1 - k * 0.5);
-      ctx.lineCap = 'round';
-      for (const rot of [0, Math.PI / 2]) {
-        ctx.save();
-        ctx.rotate(rot + spin * 0.2);
-        ctx.beginPath();
-        ctx.moveTo(-R * (0.5 + k * 0.7), 0);
-        ctx.lineTo(R * (0.5 + k * 0.7), 0);
-        ctx.stroke();
-        ctx.restore();
-      }
-      ctx.globalAlpha = (1 - k) * 0.75 * fade;
-      ctx.fillStyle = '#fff7d6';
-      ctx.beginPath();
-      ctx.arc(0, 0, R * 0.2 * (1 - k * 0.35), 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    ctx.restore();
-    ctx.globalAlpha = 1;
-  }
-
   /** 地面墨渍渲染（溅墨 + 地裂，缓慢淡出的水墨留痕；共享投影零分配） */
   private renderGroundDecals(ctx: CanvasRenderingContext2D) {    if (this.groundDecals.length === 0) return;
     ctx.save();
@@ -5961,32 +5824,6 @@ export class GameEngine {
             ctx.lineTo(-L * 0.1, oy * 0.4);
             ctx.stroke();
           }
-          break;
-        }
-        case 'QIXING': {
-          // 七星光芒剑：七道弧形剑光绕心旋转（弯月笔触层层叠出星芒，不是放射直线）
-          const sweep = 1.22;      // 单道剑光跨度
-          const rot = ease * 1.15; // 整体旋转
-          for (let i = 0; i < 7; i++) {
-            const a0 = (i / 7) * Math.PI * 2 + rot;
-            const a1 = a0 + sweep;
-            const rr = R * (0.9 + (i % 3) * 0.07);
-            // 墨晕（宽而淡）
-            drawArcPass(a0, a1, rr, 15 * s.size, 3, s.color, 0.22);
-            // 主笔（起笔重收笔轻）
-            drawArcPass(a0, a1, rr, 7.5 * s.size, 0.9, s.color, 0.95);
-            // 金锋（收笔挑光）
-            drawArcPass(a0 + sweep * 0.72, a1, rr * 1.02, 2.2, 0.4, '#fde68a', 0.9);
-          }
-          // 中心光核
-          ctx.globalAlpha = alpha * 0.55;
-          const core = ctx.createRadialGradient(0, 0, 0, 0, 0, R * 0.5);
-          core.addColorStop(0, 'rgba(255,255,255,0.9)');
-          core.addColorStop(1, 'rgba(255,255,255,0)');
-          ctx.fillStyle = core;
-          ctx.beginPath();
-          ctx.arc(0, 0, R * 0.5, 0, Math.PI * 2);
-          ctx.fill();
           break;
         }
       }
