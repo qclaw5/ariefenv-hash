@@ -104,6 +104,18 @@ export const ManualModal: React.FC<ManualModalProps> = ({ onClose }) => {
           </div>
         </div>
 
+        {/* 被动 · 七星光芒剑 */}
+        <div className="mb-3 p-3.5 bg-[#fbf1d9] rounded-xl border border-[#d9b26a] flex items-start gap-2.5">
+          <Swords className="w-4 h-4 text-[#b45309] shrink-0 mt-0.5" />
+          <div className="text-[11px] font-ink-serif text-[#85745a] leading-relaxed">
+            <span className="font-calligraphy text-sm text-[#92400e] mr-1.5">被动 · 七星光芒剑</span>
+            任意招式<strong className="text-[#b45309]">命中妖墨</strong>即叠一层<strong className="text-[#b45309]">「剑意」</strong>（4 秒内续击可续，至多 3 层，顶部 HUD 以星点显示）。
+            三层圆满后<strong className="text-[#b91c1c]">下一次普攻（轻点 / 滑砍落地斩）自动升格</strong>为七星光芒剑：锁敌瞬身贴身连挥<strong>七剑</strong>——
+            每段附 <strong>20% 减速</strong>与<strong>伤残</strong>（每层 -10% 攻速，最多 2 层），末剑追加目标<strong className="text-[#b91c1c]">已损气血 12%</strong> 的斩杀伤害；
+            七剑期间获得 <strong>21%~35% 免伤</strong>（随折数成长）。剑意 4 秒不续即散，趁势打出去才是正理。
+          </div>
+        </div>
+
         {/* 实战要诀 */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-4">
           <div className="p-2.5 bg-[#f3e3da] rounded-lg border border-[#d9a29a] flex items-start gap-2">

@@ -156,6 +156,10 @@ export interface PlayerEntity {
   ribbonWave: number;
   affixes: Affix[];
   reviveUsed: boolean;    // 残页复活是否已用
+  // --- 被动·七星光芒剑（夏洛特式剑意） ---
+  swordIntent: number;        // 剑意层数 0~3（招式命中叠加）
+  swordIntentTimer: number;   // 剑意剩余时间（秒，超时清零）
+  qixingGuardTimer: number;   // 七星释放期间的免伤剩余时间（秒）
 }
 
 export type EnemyType =
@@ -215,6 +219,10 @@ export interface EnemyEntity {
   // --- 醉墨剑客 ---
   dodgeCooldown?: number;           // 侧身闪避冷却
   swayPhase?: number;               // 醉步摇摆相位
+  // --- 七星光芒剑负面 ---
+  qixingSlowTimer?: number;         // 七星减速剩余时间（20% 移速/攻速衰减）
+  crippleStacks?: number;           // 伤残层数（每层 -10% 攻速，最多 2 层）
+  crippleTimer?: number;            // 伤残剩余时间
 }
 
 export interface Projectile {
@@ -277,7 +285,7 @@ export interface InkSlash {
   y: number;
   z: number;
   facing: 1 | -1;
-  kind: 'THRUST' | 'HORIZONTAL' | 'VERTICAL' | 'LAUNCH' | 'CIRCLE' | 'DASH';
+  kind: 'THRUST' | 'HORIZONTAL' | 'VERTICAL' | 'LAUNCH' | 'CIRCLE' | 'DASH' | 'QIXING';
   life: number;
   maxLife: number;
   color: string;

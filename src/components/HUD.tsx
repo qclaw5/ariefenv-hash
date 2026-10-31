@@ -33,6 +33,9 @@ interface HUDProps {
   onTriggerAwakening: () => void;
   awakening: number;
   awakeningMax: number;
+  /** 被动·七星光芒剑：剑意层数（满层下次普攻升格七段追击斩） */
+  swordIntent: number;
+  swordIntentMax: number;
   controlMode: ControlMode;
   onToggleControlMode: () => void;
   onTogglePause: () => void;
@@ -66,6 +69,8 @@ export const HUD: React.FC<HUDProps> = ({
   onTriggerAwakening,
   awakening,
   awakeningMax,
+  swordIntent,
+  swordIntentMax,
   controlMode,
   onToggleControlMode,
   onTogglePause,
@@ -104,6 +109,7 @@ export const HUD: React.FC<HUDProps> = ({
   const shieldPercent = shieldMax > 0 ? Math.max(0, Math.min(100, (shield / shieldMax) * 100)) : 0;
   const awakeningPercent = awakeningMax > 0 ? Math.max(0, Math.min(100, (awakening / awakeningMax) * 100)) : 0;
   const isAwakenReady = awakening >= awakeningMax;
+  const isQixingReady = swordIntentMax > 0 && swordIntent >= swordIntentMax;
   const isLowHp = hp > 0 && hpPercent <= 30;
 
   return (
@@ -200,6 +206,28 @@ export const HUD: React.FC<HUDProps> = ({
 
         {/* Center: Score & Combo Notice */}
         <div className="flex items-center gap-3 shrink-0">
+          {/* 剑意（被动·七星光芒剑）：招式命中叠层，满三层下次普攻升格七段追击斩 */}
+          <div
+            className={`flex items-center gap-1 px-2 py-1 rounded-lg border transition-colors ${
+              isQixingReady
+                ? 'bg-[#fbbf24]/25 border-[#b45309] shadow-[0_0_10px_rgba(251,191,36,0.55)] animate-pulse'
+                : 'bg-[#e6dcc4]/70 border-[#b3a181]'
+            }`}
+            title="剑意：招式命中叠层（4 秒内续击可叠），满 3 层后下次普攻升格为「七星光芒剑」——七段追击斩 + 斩杀 + 免伤"
+          >
+            <span className={`text-[9px] sm:text-[10px] font-ink-serif ${isQixingReady ? 'text-[#92400e] font-bold' : 'text-[#85745a]'}`}>
+              {isQixingReady ? '七星待发' : '剑意'}
+            </span>
+            {Array.from({ length: swordIntentMax }).map((_, i) => (
+              <span
+                key={i}
+                className={`text-[11px] leading-none ${i < swordIntent ? 'text-[#b45309]' : 'text-[#b3a181]/60'}`}
+                aria-hidden="true"
+              >
+                ✦
+              </span>
+            ))}
+          </div>
           {combo > (isMusou ? 4 : 1) && (
             <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border ${
               isMusou
@@ -354,6 +382,15 @@ export const HUD: React.FC<HUDProps> = ({
           <div className="flex items-center gap-1.5 text-[9px] font-ink-serif">
             <span className="font-semibold w-6 shrink-0 text-[#2b2118]">妖墨</span>
             <span className="text-[#5a4a34]">剩余 <span className="tabular-nums font-bold text-[#2b2118]">{enemiesLeft}</span> 只</span>
+          </div>
+          <div className={`flex items-center gap-1.5 text-[9px] font-ink-serif ${isQixingReady ? 'text-[#92400e]' : ''}`}>
+            <span className={`font-semibold w-6 shrink-0 ${isQixingReady ? 'text-[#b45309] animate-pulse' : 'text-[#85745a]'}`}>剑意</span>
+            <span className="flex items-center gap-0.5">
+              {Array.from({ length: swordIntentMax }).map((_, i) => (
+                <span key={i} className={`text-[10px] leading-none ${i < swordIntent ? 'text-[#b45309]' : 'text-[#b3a181]/60'}`} aria-hidden="true">✦</span>
+              ))}
+            </span>
+            {isQixingReady && <span className="text-[8px] font-bold text-[#b45309]">七星</span>}
           </div>
           {shieldMax > 0 && (
             <div className="col-span-2 flex items-center gap-1.5 text-[9px] font-ink-serif">
