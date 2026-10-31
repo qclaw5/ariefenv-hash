@@ -160,8 +160,7 @@ export interface PlayerEntity {
   swordIntent: number;        // 七星印记层数 0~5（招式命中叠加）
   swordIntentTimer: number;   // 印记剩余时间（秒，超时清零）
   qixingGuardTimer: number;   // 七星释放期间的免伤剩余时间（秒）
-  followUpReady: boolean;     // 追加技待发：命中后其他招式被强化
-  followUpType: GestureType | null; // 上一个命中的招式（同招不触发追加技）
+  followUpReady: boolean;     // 追加技待发：命中后下一次技能被强化（未命中即失效）
 }
 
 export type EnemyType =

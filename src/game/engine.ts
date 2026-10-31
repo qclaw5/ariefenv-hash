@@ -106,12 +106,12 @@ const MUSOU_TUNING = {
 /**
  * 被动 · 七星光芒剑（复刻王者荣耀夏洛特被动，按本作数值与节奏换算）
  * 机制：任意招式命中叠加 1 层「剑意」（4 秒内续击可叠，最多 3 层）；
- * 叠满 5 层后，下一次技能自动升格为「七星光芒剑」——
+ * 叠满 3 层后，下一次技能自动升格为「七星光芒剑」——
  * 锁定最近妖墨贴身追击，连挥七剑（每段附 20% 减速 + 伤残减攻速），
  * 末剑追加目标已损气血 12% 的斩杀伤害，释放期间获得 21%~35% 免伤。
  */
 const QIXING = {
-  maxStacks: 5,            // 七星印记上限（五层圆满，下一次技能升格）
+  maxStacks: 3,            // 七星印记上限（三层圆满，下一次技能升格）
   stackWindowSec: 4,       // 剑意持续（秒）
   hits: 7,                 // 七段斩击
   hitDmgMult: 0.62,        // 每段伤害 = 基础 24 × 该系数（总倍率约 4.34）
@@ -403,7 +403,6 @@ export class GameEngine {
       swordIntentTimer: 0,
       qixingGuardTimer: 0,
       followUpReady: false,
-      followUpType: null,
     };
   }
 
@@ -1024,7 +1023,7 @@ export class GameEngine {
     this.callbacks.onSwordIntentChange(val, QIXING.maxStacks);
   }
 
-  /** 招式命中叠一层印记（4 秒不续则清零；五层圆满后下一技能升格七星光芒剑） */
+  /** 招式命中叠一层印记（4 秒不续则清零；三层圆满后下一技能升格七星光芒剑） */
   private gainSwordIntent() {
     const player = this.player;
     if (this.qixingActive || player.hp <= 0) return;
@@ -2301,14 +2300,8 @@ export class GameEngine {
       return;
     }
 
-    // 被动·追加技：上一次命中过「其他」招式后，本招强化为追加技（同招不触发，鼓励变招）
-    const isFollowUp = player.followUpReady && player.followUpType !== res.type;
-    if (isFollowUp) {
-      player.followUpReady = false;
-      this.emitFollowUp();
-      this.addFloatingText(`追加技 · ${res.name}`, player.pos.x, player.pos.y + 96, '#fbbf24', 1.4, true, true);
-      this.spawnShockRing(player.pos.x, player.pos.z, 6, 96, 0.4, '#fbbf24', 2.5);
-    }
+    // 被动·追加技：命中后下一次技能即为追加技（墨耗为 0）；本招未命中则状态消耗、下次不再是追加技
+    const isFollowUp = player.followUpReady;
 
     // Check ink cost（无双墨耗减免：招式放得勤快；追加技不耗墨意）
     const inkCost = isFollowUp
@@ -2326,6 +2319,14 @@ export class GameEngine {
     if (inkCost > 0) {
       player.ink = Math.max(0, player.ink - inkCost);
       this.emitInk();
+    }
+
+    // 追加技在此刻生效并消耗：命中则下一招再续，未命中则不再续
+    if (isFollowUp) {
+      player.followUpReady = false;
+      this.emitFollowUp();
+      this.addFloatingText(`追加技 · ${res.name}`, player.pos.x, player.pos.y + 96, '#fbbf24', 1.4, true, true);
+      this.spawnShockRing(player.pos.x, player.pos.z, 6, 96, 0.4, '#fbbf24', 2.5);
     }
 
     // 无双连招链登记：窗口内连续出招叠层，变招涨层更快（伤害/范围滚雪球）
@@ -2546,7 +2547,6 @@ export class GameEngine {
         if (taichiHits > 0) {
           this.gainSwordIntent();
           player.followUpReady = true;
-          player.followUpType = res.type;
           this.emitFollowUp();
           if (isFollowUp) this.spawnShockRing(player.pos.x, player.pos.z, 8, 128, 0.4, '#fbbf24', 3);
         }
@@ -2994,13 +2994,12 @@ export class GameEngine {
     }
 
     if (hitCount > 0) {
-      // 被动·七星光芒剑：招式命中叠一层印记（一次挥击只叠一层，五层圆满后下一技能升格）
+      // 被动·七星光芒剑：招式命中叠一层印记（一次挥击只叠一层，三层圆满后下一技能升格）
       this.gainSwordIntent();
 
       // 被动·追加技：命中后，下一个「不同」招式自动强化为追加技
       if (opts.isGesture && opts.gestureType) {
         player.followUpReady = true;
-        player.followUpType = opts.gestureType;
         this.emitFollowUp();
       }
 

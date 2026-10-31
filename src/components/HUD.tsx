@@ -398,7 +398,7 @@ export const HUD: React.FC<HUDProps> = ({
 
         {/* Right unified action cluster: 跃/觉 + 六技能（触屏端隐藏「刺」——右屏轻点即刺，7 键防窄屏溢出） */}
         <div className="ml-auto flex flex-col items-end gap-1.5">
-          {/* 被动 buff 条（王者式：置于技能键正上方）：七星印记 5 层 + 追加技待发 */}
+          {/* 被动 buff 条（王者式：置于技能键正上方）：七星印记 3 层 + 追加技待发 */}
           <div className="pointer-events-none flex items-center gap-1.5">
             <div
               className={`flex items-center gap-1 px-2 py-1 rounded-lg border shadow-sm ${
@@ -406,7 +406,7 @@ export const HUD: React.FC<HUDProps> = ({
                   ? 'bg-[#fbbf24]/30 border-[#b45309] shadow-[0_0_12px_rgba(251,191,36,0.6)] animate-pulse'
                   : 'bg-[#f1ead7]/85 border-[#b3a181]'
               }`}
-              title="七星光芒剑：招式命中叠印记（4 秒内续击可叠），五层圆满后下一次技能升格为七段追击斩"
+              title="七星光芒剑：招式命中叠印记（4 秒内续击可叠），三层圆满后下一次技能升格为七段追击斩"
             >
               <span className={`text-[9px] font-ink-serif ${isQixingReady ? 'text-[#92400e] font-bold' : 'text-[#85745a]'}`}>
                 {isQixingReady ? '七星' : '印记'}
