@@ -152,14 +152,14 @@ export class GestureRecognizer {
       };
     }
 
-    // 5. Rising Launcher / Diagonal Up (挑 "丿" / "乀"):
+    // 5. 破空光剑 / Diagonal Up (上挑 "丿" / "乀"):
     // Upward stroke (dy < 0) with substantial upward velocity
     if (dy < -45 && Math.abs(dy) > 40) {
       return {
         type: 'DIAGONAL_UP',
-        name: '飞燕凌空',
-        hanzi: '挑',
-        desc: '墨锋挑空，击飞目标实现凌空追击',
+        name: '破空光剑',
+        hanzi: '破',
+        desc: '原地画出七道剑痕，重创周身群敌并施加减速',
         confidence: 0.90,
         points,
       };
@@ -187,9 +187,9 @@ export class GestureRecognizer {
     } else {
       return {
         type: 'DIAGONAL_UP',
-        name: '飞燕凌空',
-        hanzi: '挑',
-        desc: '墨锋挑空，击飞目标实现凌空追击',
+        name: '破空光剑',
+        hanzi: '破',
+        desc: '原地画出七道剑痕，重创周身群敌并施加减速',
         confidence: 0.80,
         points,
       };

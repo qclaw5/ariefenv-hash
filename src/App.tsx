@@ -48,9 +48,10 @@ export default function App() {
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [awakening, setAwakening] = useState<number>(0);
   const [awakeningMax, setAwakeningMax] = useState<number>(100);
-  // 被动·七星光芒剑：剑意层数（0~3）
+  // 被动·七星光芒剑：印记层数（0~5）与追加技待发
   const [swordIntent, setSwordIntent] = useState<number>(0);
-  const [swordIntentMax, setSwordIntentMax] = useState<number>(3);
+  const [swordIntentMax, setSwordIntentMax] = useState<number>(5);
+  const [followUpReady, setFollowUpReady] = useState<boolean>(false);
 
   // 波次大字横幅
   const [banner, setBanner] = useState<{ title: string; isBossWave: boolean; key: number } | null>(null);
@@ -154,6 +155,9 @@ export default function App() {
       onSwordIntentChange: (stacks, maxStacks) => {
         setSwordIntent(stacks);
         setSwordIntentMax(maxStacks);
+      },
+      onFollowUpChange: (ready) => {
+        setFollowUpReady(ready);
       },
       onControlModeChange: (mode) => {
         setControlMode(mode);
@@ -434,6 +438,7 @@ export default function App() {
           awakeningMax={awakeningMax}
           swordIntent={swordIntent}
           swordIntentMax={swordIntentMax}
+          followUpReady={followUpReady}
           controlMode={controlMode}
           onToggleControlMode={handleToggleControlMode}
           onTogglePause={handleTogglePause}

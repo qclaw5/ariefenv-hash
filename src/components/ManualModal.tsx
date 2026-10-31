@@ -36,11 +36,11 @@ export const ManualModal: React.FC<ManualModalProps> = ({ onClose }) => {
       color: 'text-[#b45309] border-[#b45309]/40 bg-[#b45309]/10',
     },
     {
-      hanzi: '挑',
-      name: '飞燕凌空',
+      hanzi: '破',
+      name: '破空光剑',
       strokeType: '自下而上斜划「丿」',
       key: '右下至左上/右上',
-      desc: '墨锋自下向上一挑，将正前方的敌人击飞至高空，可配合跳跃进行空战追斩。',
+      desc: '原地画出七道剑痕，剑痕依次绽开重创周身群敌（首道全额、其后三道各三成），附 50% 减速；释放期间霸体免伤。',
       color: 'text-[#16a34a] border-[#16a34a]/40 bg-[#16a34a]/10',
     },
     {

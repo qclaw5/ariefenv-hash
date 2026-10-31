@@ -6,7 +6,7 @@ export type GestureType =
   | 'TAP'           // 刺: 基础墨刺 / 连击
   | 'HORIZONTAL'    // 横: 横扫千军
   | 'VERTICAL_DOWN' // 劈: 力劈华山
-  | 'DIAGONAL_UP'   // 挑: 飞燕凌空
+  | 'DIAGONAL_UP'   // 破: 破空光剑
   | 'CIRCLE'        // 圆: 浑元太极
   | 'ZIGZAG';       // 闪: 踏影瞬杀
 
@@ -157,9 +157,11 @@ export interface PlayerEntity {
   affixes: Affix[];
   reviveUsed: boolean;    // 残页复活是否已用
   // --- 被动·七星光芒剑（夏洛特式剑意） ---
-  swordIntent: number;        // 剑意层数 0~3（招式命中叠加）
-  swordIntentTimer: number;   // 剑意剩余时间（秒，超时清零）
+  swordIntent: number;        // 七星印记层数 0~5（招式命中叠加）
+  swordIntentTimer: number;   // 印记剩余时间（秒，超时清零）
   qixingGuardTimer: number;   // 七星释放期间的免伤剩余时间（秒）
+  followUpReady: boolean;     // 追加技待发：命中后其他招式被强化
+  followUpType: GestureType | null; // 上一个命中的招式（同招不触发追加技）
 }
 
 export type EnemyType =
@@ -219,8 +221,9 @@ export interface EnemyEntity {
   // --- 醉墨剑客 ---
   dodgeCooldown?: number;           // 侧身闪避冷却
   swayPhase?: number;               // 醉步摇摆相位
-  // --- 七星光芒剑负面 ---
-  qixingSlowTimer?: number;         // 七星减速剩余时间（20% 移速/攻速衰减）
+  // --- 七星光芒剑 / 破空光剑负面 ---
+  qixingSlowTimer?: number;         // 减速剩余时间
+  qixingSlowPct?: number;           // 减速幅度（七星 20% / 破空光剑 50%）
   crippleStacks?: number;           // 伤残层数（每层 -10% 攻速，最多 2 层）
   crippleTimer?: number;            // 伤残剩余时间
 }

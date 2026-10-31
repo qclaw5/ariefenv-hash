@@ -3,8 +3,8 @@
  * v2: 墨盾条 / Boss顶部血条 / 暂停按钮 / 音量控制 / 低血警示
  */
 
-import React, { useEffect, useState } from 'react';
-import { Volume2, VolumeX, BookOpen, Layers, Sparkles, Wand2, Split, Pause, Smartphone } from 'lucide-react';
+import React, { useState } from 'react';
+import { Volume2, VolumeX, BookOpen, Layers, Sparkles, Wand2, Split, Pause } from 'lucide-react';
 import { Affix, BossHudInfo, ControlMode, GameMode, GestureResult } from '../types/game';
 
 interface HUDProps {
@@ -33,9 +33,11 @@ interface HUDProps {
   onTriggerAwakening: () => void;
   awakening: number;
   awakeningMax: number;
-  /** 被动·七星光芒剑：剑意层数（满层下次普攻升格七段追击斩） */
+  /** 被动·七星光芒剑：印记层数（满层下次技能升格七段追击斩） */
   swordIntent: number;
   swordIntentMax: number;
+  /** 追加技待发 */
+  followUpReady: boolean;
   controlMode: ControlMode;
   onToggleControlMode: () => void;
   onTogglePause: () => void;
@@ -71,6 +73,7 @@ export const HUD: React.FC<HUDProps> = ({
   awakeningMax,
   swordIntent,
   swordIntentMax,
+  followUpReady,
   controlMode,
   onToggleControlMode,
   onTogglePause,
@@ -78,31 +81,6 @@ export const HUD: React.FC<HUDProps> = ({
 }) => {
   const [showVolume, setShowVolume] = useState(false);
   const isMusou = gameMode === 'MUSOU';
-
-  // 竖屏体验提示：仅触屏设备且竖屏时提示横屏更佳（用户点「知道了」后永久记住）
-  const [showPortraitHint, setShowPortraitHint] = useState<boolean>(false);
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return;
-    if (!window.matchMedia('(pointer: coarse)').matches) return;
-    let dismissed = false;
-    try { dismissed = localStorage.getItem('ink_portrait_hint_dismissed') === '1'; } catch { /* 隐私模式忽略 */ }
-    if (dismissed) return;
-    const mq = window.matchMedia('(orientation: portrait)');
-    const update = () => setShowPortraitHint(mq.matches);
-    update();
-    if (typeof mq.addEventListener === 'function') {
-      mq.addEventListener('change', update);
-      return () => mq.removeEventListener('change', update);
-    }
-    // 老版 iOS Safari 降级
-    mq.addListener(update);
-    return () => mq.removeListener(update);
-  }, []);
-
-  const dismissPortraitHint = () => {
-    setShowPortraitHint(false);
-    try { localStorage.setItem('ink_portrait_hint_dismissed', '1'); } catch { /* 隐私模式忽略 */ }
-  };
 
   const hpPercent = Math.max(0, Math.min(100, (hp / maxHp) * 100));
   const inkPercent = Math.max(0, Math.min(100, (ink / maxInk) * 100));
@@ -206,28 +184,6 @@ export const HUD: React.FC<HUDProps> = ({
 
         {/* Center: Score & Combo Notice */}
         <div className="flex items-center gap-3 shrink-0">
-          {/* 剑意（被动·七星光芒剑）：招式命中叠层，满三层下次普攻升格七段追击斩 */}
-          <div
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg border transition-colors ${
-              isQixingReady
-                ? 'bg-[#fbbf24]/25 border-[#b45309] shadow-[0_0_10px_rgba(251,191,36,0.55)] animate-pulse'
-                : 'bg-[#e6dcc4]/70 border-[#b3a181]'
-            }`}
-            title="剑意：招式命中叠层（4 秒内续击可叠），满 3 层后下次普攻升格为「七星光芒剑」——七段追击斩 + 斩杀 + 免伤"
-          >
-            <span className={`text-[9px] sm:text-[10px] font-ink-serif ${isQixingReady ? 'text-[#92400e] font-bold' : 'text-[#85745a]'}`}>
-              {isQixingReady ? '七星待发' : '剑意'}
-            </span>
-            {Array.from({ length: swordIntentMax }).map((_, i) => (
-              <span
-                key={i}
-                className={`text-[11px] leading-none ${i < swordIntent ? 'text-[#b45309]' : 'text-[#b3a181]/60'}`}
-                aria-hidden="true"
-              >
-                ✦
-              </span>
-            ))}
-          </div>
           {combo > (isMusou ? 4 : 1) && (
             <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border ${
               isMusou
@@ -383,15 +339,6 @@ export const HUD: React.FC<HUDProps> = ({
             <span className="font-semibold w-6 shrink-0 text-[#2b2118]">妖墨</span>
             <span className="text-[#5a4a34]">剩余 <span className="tabular-nums font-bold text-[#2b2118]">{enemiesLeft}</span> 只</span>
           </div>
-          <div className={`flex items-center gap-1.5 text-[9px] font-ink-serif ${isQixingReady ? 'text-[#92400e]' : ''}`}>
-            <span className={`font-semibold w-6 shrink-0 ${isQixingReady ? 'text-[#b45309] animate-pulse' : 'text-[#85745a]'}`}>剑意</span>
-            <span className="flex items-center gap-0.5">
-              {Array.from({ length: swordIntentMax }).map((_, i) => (
-                <span key={i} className={`text-[10px] leading-none ${i < swordIntent ? 'text-[#b45309]' : 'text-[#b3a181]/60'}`} aria-hidden="true">✦</span>
-              ))}
-            </span>
-            {isQixingReady && <span className="text-[8px] font-bold text-[#b45309]">七星</span>}
-          </div>
           {shieldMax > 0 && (
             <div className="col-span-2 flex items-center gap-1.5 text-[9px] font-ink-serif">
               <span className="text-[#0369a1] font-semibold w-6 shrink-0">墨盾</span>
@@ -446,11 +393,48 @@ export const HUD: React.FC<HUDProps> = ({
       {/* Bottom action row：容器不再拦截触控（pointer-events-none），左下角完全让给摇杆/划砍区；动作键统一右簇 */}
       <div className="flex items-end justify-between pointer-events-none">
         <div className="text-[10px] font-ink-serif text-[#937f60] hidden lg:block pl-1 pb-0.5">
-          键盘: [WASD]纵深移动 [Space]轻功起跃 [J]刺 [U]横 [I]劈 [O]圆 [L]闪 [G]觉醒 [ESC]暂停
+          键盘: [WASD]纵深移动 [Space]轻功起跃 [J]刺 [U]横 [I]劈 [P]破空 [O]圆 [L]闪 [G]觉醒 [ESC]暂停
         </div>
 
         {/* Right unified action cluster: 跃/觉 + 六技能（触屏端隐藏「刺」——右屏轻点即刺，7 键防窄屏溢出） */}
-        <div className="pointer-events-auto flex items-center gap-1 sm:gap-1.5 ml-auto bg-[#f1ead7]/85 p-1.5 rounded-xl border border-[#b3a181] shadow-lg">
+        <div className="ml-auto flex flex-col items-end gap-1.5">
+          {/* 被动 buff 条（王者式：置于技能键正上方）：七星印记 5 层 + 追加技待发 */}
+          <div className="pointer-events-none flex items-center gap-1.5">
+            <div
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg border shadow-sm ${
+                isQixingReady
+                  ? 'bg-[#fbbf24]/30 border-[#b45309] shadow-[0_0_12px_rgba(251,191,36,0.6)] animate-pulse'
+                  : 'bg-[#f1ead7]/85 border-[#b3a181]'
+              }`}
+              title="七星光芒剑：招式命中叠印记（4 秒内续击可叠），五层圆满后下一次技能升格为七段追击斩"
+            >
+              <span className={`text-[9px] font-ink-serif ${isQixingReady ? 'text-[#92400e] font-bold' : 'text-[#85745a]'}`}>
+                {isQixingReady ? '七星' : '印记'}
+              </span>
+              {Array.from({ length: swordIntentMax }).map((_, i) => (
+                <span
+                  key={i}
+                  className={`text-[11px] leading-none ${i < swordIntent ? 'text-[#b45309]' : 'text-[#b3a181]/55'}`}
+                  aria-hidden="true"
+                >
+                  ✦
+                </span>
+              ))}
+              <span className={`text-[9px] tabular-nums font-ink-serif ${isQixingReady ? 'text-[#92400e]' : 'text-[#a08e70]'}`}>
+                {swordIntent}/{swordIntentMax}
+              </span>
+            </div>
+            {followUpReady && (
+              <div
+                className="flex items-center gap-1 px-2 py-1 rounded-lg border border-[#0369a1] bg-[#0369a1]/15 shadow-[0_0_10px_rgba(3,105,161,0.45)] animate-pulse"
+                title="追加技：招式命中后，下一个不同招式自动强化（伤害/范围提升 + 附带伤残），且不耗墨意"
+              >
+                <span className="text-[9px] font-ink-serif font-bold text-[#075985]">追加技</span>
+              </div>
+            )}
+          </div>
+
+          <div className="pointer-events-auto flex items-center gap-1 sm:gap-1.5 bg-[#f1ead7]/85 p-1.5 rounded-xl border border-[#b3a181] shadow-lg">
           <button
             onClick={onTriggerJump}
             className="flex flex-col items-center justify-center w-10 h-10 sm:w-11 sm:h-11 bg-[#ded3b8]/90 hover:bg-[#c9b995] active:scale-95 text-[#2b2118] border border-[#0369a1]/50 rounded-xl transition-transform cursor-pointer"
@@ -502,10 +486,10 @@ export const HUD: React.FC<HUDProps> = ({
           <button
             onClick={() => onTriggerMove('DIAGONAL_UP')}
             className="w-10 h-10 sm:w-11 sm:h-11 flex flex-col items-center justify-center bg-[#ded3b8] hover:bg-[#c9b995] active:scale-95 text-[#2b2118] border border-[#b3a181] rounded-lg transition-transform cursor-pointer"
-            title="飞燕凌空 (右屏右上/左上挥挑「丿」)"
+            title="破空光剑 (快捷键 P / 右屏右上/左上挑「丿」)"
           >
-            <span className="text-sm font-calligraphy text-[#16a34a]">挑</span>
-            <span className="text-[9px] text-[#85745a]">击飞</span>
+            <span className="text-sm font-calligraphy text-[#16a34a]">破</span>
+            <span className="text-[9px] text-[#85745a]">光剑[P]</span>
           </button>
 
           <button
@@ -525,22 +509,9 @@ export const HUD: React.FC<HUDProps> = ({
             <span className="text-sm font-calligraphy text-[#b91c1c]">闪</span>
             <span className="text-[9px] text-[#85745a]">瞬影[L]</span>
           </button>
+          </div>
         </div>
       </div>
-
-      {/* 竖屏体验提示（触屏 + 竖屏时出现，点「知道了」后永久记住） */}
-      {showPortraitHint && (
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-[calc(env(safe-area-inset-bottom,0px)+76px)] z-20 pointer-events-auto flex items-center gap-2 bg-[#2b2118]/85 text-[#f1ead7] backdrop-blur-sm rounded-full pl-3 pr-1.5 py-1.5 shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <Smartphone className="w-3.5 h-3.5 text-[#fbbf24] shrink-0" />
-          <span className="text-[11px] font-ink-serif whitespace-nowrap">横屏执笔 · 挥洒更自如</span>
-          <button
-            onClick={dismissPortraitHint}
-            className="text-[10px] font-ink-serif bg-[#f1ead7]/15 hover:bg-[#f1ead7]/25 border border-[#f1ead7]/30 rounded-full px-2.5 py-1 transition-colors cursor-pointer shrink-0"
-          >
-            知道了
-          </button>
-        </div>
-      )}
     </div>
   );
 };
