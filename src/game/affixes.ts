@@ -61,11 +61,11 @@ export const ALL_AFFIXES: Affix[] = [
     name: '瞬影连环',
     hanziSeal: '影',
     rarity: 'LEGENDARY',
-    desc: '「闪」招式命中敌人立即重置内力消耗，可连续发动穿梭截杀。',
+    desc: '身随影动，招出如风：移动速度提升25%，招式伤害提升18%。',
     iconType: 'feather',
     stats: {
-      flashCooldownReset: true,
       moveSpeedBonus: 25,
+      gestureBonus: 18,
     },
   },
   {
@@ -96,11 +96,11 @@ export const ALL_AFFIXES: Affix[] = [
     name: '行云流水',
     hanziSeal: '韵',
     rarity: 'COMMON',
-    desc: '身法空灵，墨意恢复速度提高80%，移动速度提升15%。',
+    desc: '身法空灵如行云流水，移动速度提升20%，完全闪避敌人攻击的概率提升6%。',
     iconType: 'feather',
     stats: {
-      inkRegenBonus: 80,
-      moveSpeedBonus: 15,
+      moveSpeedBonus: 20,
+      dodgeChancePercent: 6,
     },
   },
   {
@@ -108,7 +108,7 @@ export const ALL_AFFIXES: Affix[] = [
     name: '金刚铁骨',
     hanziSeal: '刚',
     rarity: 'RARE',
-    desc: '内力护体，受到伤害减少30%，气血上限提升40点。',
+    desc: '金刚护体，受到伤害减少30%，气血上限提升40点。',
     iconType: 'shield',
     stats: {
       damageReduction: 30,
@@ -228,11 +228,11 @@ export const ALL_AFFIXES: Affix[] = [
     name: '胸藏万墨',
     hanziSeal: '藏',
     rarity: 'COMMON',
-    desc: '墨海充盈：内力上限提升40点，暴击时额外回复5点墨意。',
+    desc: '胸藏万墨，笔意自生：暴击率提升8%，暴击伤害提升20%。',
     iconType: 'brush',
     stats: {
-      critGainInk: 5,
-      inkRegenBonus: 30,
+      critChanceBonus: 0.08,
+      critDamageBonus: 20,
     },
   },
   {
@@ -277,11 +277,11 @@ export const ALL_AFFIXES: Affix[] = [
     name: '墨魂涌动',
     hanziSeal: '涌',
     rarity: 'COMMON',
-    desc: '墨魂在经脉中奔涌：觉醒充能速度提升30%，墨意回复提高15%。',
+    desc: '墨魂在经脉中奔涌：觉醒充能速度提升30%，觉醒技伤害提升12%。',
     iconType: 'brush',
     stats: {
       awakeningGainBonus: 30,
-      inkRegenBonus: 15,
+      awakeningDamageBonus: 12,
     },
   },
   {

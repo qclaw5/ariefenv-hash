@@ -56,7 +56,7 @@ export const ManualModal: React.FC<ManualModalProps> = ({ onClose }) => {
       name: '前进喷泉',
       strokeType: '折线「Z」或「乛」',
       key: 'L 键',
-      desc: '向前冲刺并快速连刺六次，每段造成伤害并回复气血——攻守兼备的续航招。',
+      desc: '自动锁定最近妖墨并转身，朝其冲刺停在身侧连刺六次；每段造成伤害并回复气血，出刺时持续校准朝向。',
       color: 'text-[#b91c1c] border-[#b91c1c]/40 bg-[#b91c1c]/10',
     },
   ];
@@ -110,7 +110,7 @@ export const ManualModal: React.FC<ManualModalProps> = ({ onClose }) => {
           <div className="text-[11px] font-ink-serif text-[#85745a] leading-relaxed">
             <span className="font-calligraphy text-sm text-[#92400e] mr-1.5">被动 · 七星光芒剑</span>
             任意招式<strong className="text-[#b45309]">命中妖墨</strong>即叠一层<strong className="text-[#b45309]">「印记」</strong>（4 秒内续击可续，最多叠 <strong>5 层</strong>，技能键上方星点显示）。
-            <strong className="text-[#0369a1]">追加技</strong>：命中后下一次技能自动强化（伤害 ×1.45、范围 ×1.25、附带伤残），且<strong className="text-[#0369a1]">不耗墨意</strong>；追加技若未命中，状态即失效。
+            <strong className="text-[#0369a1]">追加技</strong>：命中后下一次技能自动强化（伤害 ×1.45、范围 ×1.25、附带伤残）；追加技若未命中，状态即失效。
             满 <strong>3 层</strong>后<strong className="text-[#b91c1c]">下一次技能自动升格</strong>（消耗 3 层，余量保留）为七星光芒剑：锁敌瞬身连挥<strong>七剑</strong>——每段附 <strong>20% 减速</strong>与<strong>伤残</strong>（每层 -10% 攻速，最多 2 层），
             末剑追加目标<strong className="text-[#b91c1c]">已损气血 12%</strong> 的斩杀伤害，七剑期间获得 <strong>21%~35% 免伤</strong>（随折数成长）。
           </div>
@@ -133,7 +133,7 @@ export const ManualModal: React.FC<ManualModalProps> = ({ onClose }) => {
           <div className="p-2.5 bg-[#e9e2f0] rounded-lg border border-[#c3aed6] flex items-start gap-2">
             <Skull className="w-4 h-4 text-[#7c3aed] shrink-0 mt-0.5" />
             <div className="text-[10px] font-ink-serif text-[#85745a] leading-relaxed">
-              <span className="text-[#8b5cf6] font-semibold">精英精锐</span>：带光环词缀的精锐（迅捷/铁壁/狂暴/汲影）更强也更凶，斩杀可获高额功绩与墨意。
+              <span className="text-[#8b5cf6] font-semibold">精英精锐</span>：带光环词缀的精锐（迅捷/铁壁/狂暴/汲影）更强也更凶，斩杀可获高额功绩。
             </div>
           </div>
         </div>
@@ -150,7 +150,7 @@ export const ManualModal: React.FC<ManualModalProps> = ({ onClose }) => {
         <div className="p-2.5 mb-4 bg-[#f6e2df] rounded-lg border border-[#b91c1c]/40 flex items-start gap-2">
           <Swords className="w-4 h-4 text-[#b91c1c] shrink-0 mt-0.5" />
           <div className="text-[10px] font-ink-serif text-[#85745a] leading-relaxed">
-            <span className="text-[#b91c1c] font-semibold">无双演武模式</span>：标题界面可选。妖墨如怒潮般成群涌来（刷怪极密且成群压上），每隔一阵一尊墨煞拦路、五阵起双煞同临、十三阵起三煞齐临；敌单体更脆、连斩窗口更长——连击越高攻击越强（每连 +0.2%，上限 +30%）！<span className="text-[#b45309] font-semibold">连招链</span>：1.8 秒内连续出招叠链，交替不同招式（刺→横→劈→圆→闪）涨层更快，链层提高伤害与攻击范围，超时清零；<span className="text-[#b45309] font-semibold">斩罡余波</span>：每一击都荡开墨浪波及周身妖墨，任意招式皆是群体技。杀敌回墨大增、招式墨耗减半，尽情倾泻！二十五连「杀」、五十连「破」、百连「灭」触发全屏杀阵演出。无通关概念，以杀止杀，功绩与最深阵数独立计入「无双血录」。
+            <span className="text-[#b91c1c] font-semibold">无双演武模式</span>：标题界面可选。妖墨如怒潮般成群涌来（刷怪极密且成群压上），每隔一阵一尊墨煞拦路、五阵起双煞同临、十三阵起三煞齐临；敌单体更脆、连斩窗口更长——连击越高攻击越强（每连 +0.2%，上限 +30%）！<span className="text-[#b45309] font-semibold">连招链</span>：1.8 秒内连续出招叠链，交替不同招式（刺→横→劈→圆→泉）涨层更快，链层提高伤害与攻击范围，超时清零；<span className="text-[#b45309] font-semibold">斩罡余波</span>：每一击都荡开墨浪波及周身妖墨，任意招式皆是群体技。招式无任何资源消耗，尽情倾泻！二十五连「杀」、五十连「破」、百连「灭」触发全屏杀阵演出。无通关概念，以杀止杀，功绩与最深阵数独立计入「无双血录」。
           </div>
         </div>
 

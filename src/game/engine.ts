@@ -55,7 +55,7 @@ const DIFFICULTY_TUNING: Record<Difficulty, { enemyHp: number; enemyDmg: number;
 /**
  * 无双演武特化调参 v2「势如潮涌」：刷怪更密（间隔×0.26）、怪海量再升级、
  * Boss 海每 2 阵一煞（5 阵双煞、13 阵三煞同屏）、连招链系统（变招加成）、
- * 斩罡余波（每一击都群体波及）、墨经济宽松（杀敌回墨+墨耗减免），攻击更顺畅。
+ * 斩罡余波（每一击都群体波及）、无资源消耗（夏洛特式无蓝条，招式只管放），攻击更顺畅。
  */
 const MUSOU_TUNING = {
   enemyHpMult: 0.62,       // 敌单体 HP 乘数（怪海量翻倍后单体更脆，一刀一片）
@@ -76,10 +76,6 @@ const MUSOU_TUNING = {
   gestureDmgBonus: 1.18,   // 手势伤害乘数（v1 1.1：怪海清场效率再提升）
   comboDmgPerStack: 0.002, // 连击气魄：每连击 +0.2% 手势伤害（上限 150 连 +30%）
   comboDmgCap: 150,        // 连击气魄上限连击数（v1 100）
-  killInk: 30,             // 击杀回墨（v1 22）：杀得多回得快，招式循环永动机
-  killInkElite: 42,        // 精英击杀回墨（v1 32）
-  inkRegen: 18,            // 无双被动回墨/秒（经典 14）：墨足则招式连绵不绝
-  gestureCostMult: 0.55,   // 无双手势墨耗乘数（招式放得勤快，不能力不济卡壳）
   awakeningPerKill: 9,     // 觉醒充能/杀（v1 7）：怪海量下大招更是源源不断
   awakeningPerHitMult: 1.3,// 无双命中充能额外乘数
   hitStopSec: 0.03,        // 无双命中停帧（经典 0.055）：短停帧保打击感但不粘滞
@@ -157,7 +153,6 @@ const POKUANG = {
   slowSec: 1.2,            // 减速持续
   guardPct: 30,            // 霸体期间免伤
   guardSec: 0.62,          // 霸体持续
-  inkCost: 40,             // 墨耗（大招更贵）
 };
 
 /**
@@ -186,7 +181,6 @@ const MUSOU_KILL_MILESTONES: { at: number; hanzi: string }[] = [
 
 export interface GameEngineCallbacks {
   onHpChange: (hp: number, maxHp: number) => void;
-  onInkChange: (ink: number, maxInk: number) => void;
   onShieldChange: (shield: number, shieldMax: number) => void;
   onWaveChange: (wave: number, waveTitle: string, enemiesLeft: number) => void;
   onWaveBanner: (title: string, isBossWave: boolean) => void;
@@ -249,6 +243,19 @@ export class GameEngine {
   private qixingActive: boolean = false;
   /** 当前七星免伤百分比（随折数成长 21%~35%） */
   private qixingGuardPercent: number = QIXING.guardBase;
+  /**
+   * 七星连斩推进器：由主循环逐帧驱动（不走嵌套调度）。
+   * 剑数/间隔/收剑只有一个真值来源，任何一剑都不会被吞掉。
+   */
+  private qixingSeq: {
+    index: number;        // 当前第几剑（0 起）
+    timer: number;        // 距下一剑的倒计时
+    landed: number;       // 实际命中剑数（结算用）
+    isFollowUp: boolean;
+    affixMult: number;
+    gestureMult: number;
+    chainMult: number;
+  } | null = null;
   private lastSwordIntentEmitted: number = -1;
   private lastFollowUpEmitted: boolean = false;
   /** 破空光剑：霸体 + 30% 免伤窗口剩余时间 */
@@ -268,7 +275,7 @@ export class GameEngine {
   // --- 特效增强子系统 ---
   private inkSlashes: InkSlash[] = [];      // 笔刷剑弧
   /** 七角星剑阵（七星/破空）：贴身绘制，画在角色身上 */
-  private starSigils: { x: number; y: number; z: number; life: number; maxLife: number; size: number; color: string }[] = [];
+  private starSigils: { x: number; y: number; z: number; life: number; maxLife: number; size: number; color: string; follow?: boolean; rays?: boolean }[] = [];
   private groundDecals: GroundDecal[] = []; // 地面墨渍/地裂
   private shockRings: ShockRing[] = [];     // 冲击激波环
   private slowMotionTimer: number = 0;      // 电影化慢动作剩余
@@ -370,7 +377,6 @@ export class GameEngine {
   // Feedback state
   private hurtFlashTimer: number = 0;
   private ambientTimer: number = 0;
-  private lastInkEmitted: number = -1;
   private lastShieldEmitted: number = -1;
   private lastBossEmitted: string = '';
   private lastScoreEmitted: number = -1;
@@ -399,8 +405,6 @@ export class GameEngine {
       facing: 1,
       hp: 120,
       maxHp: 120,
-      ink: 100,
-      maxInk: 100,
       shield: 0,
       shieldMax: 0,
       state: 'IDLE',
@@ -828,8 +832,6 @@ export class GameEngine {
       player: {
         hp: p.hp,
         maxHp: p.maxHp,
-        ink: p.ink,
-        maxInk: p.maxInk,
         shield: p.shield,
         shieldMax: p.shieldMax,
         reviveUsed: p.reviveUsed,
@@ -850,8 +852,6 @@ export class GameEngine {
     p.hp = Math.max(1, snap.player.hp);
     p.maxHp = Math.max(1, snap.player.maxHp);
     p.hp = Math.min(p.hp, p.maxHp);
-    p.ink = Math.min(Math.max(0, snap.player.ink), snap.player.maxInk || 100);
-    p.maxInk = snap.player.maxInk || 100;
     p.shield = Math.min(Math.max(0, snap.player.shield), snap.player.shieldMax || 0);
     p.shieldMax = snap.player.shieldMax || 0;
     p.reviveUsed = !!snap.player.reviveUsed;
@@ -886,6 +886,7 @@ export class GameEngine {
     // 七星光芒剑：续战剑意归零（快照不含临时战斗态）
     this.qixingActive = false;
     this.qixingGuardPercent = QIXING.guardBase;
+    this.qixingSeq = null;
     this.lastSwordIntentEmitted = -1;
     this.lastFollowUpEmitted = true; // 先置 true 再 emit，保证 UI 收到「追加技失效」
     this.emitFollowUp();
@@ -919,7 +920,6 @@ export class GameEngine {
 
     // 全量同步 UI
     this.emitHp();
-    this.emitInk();
     this.emitShield(true);
     this.emitScore(true);
     this.emitAwakening(true);
@@ -970,6 +970,7 @@ export class GameEngine {
     // 七星光芒剑状态重置（剑意清零，避免重开带着满层剑意白嫖一击）
     this.qixingActive = false;
     this.qixingGuardPercent = QIXING.guardBase;
+    this.qixingSeq = null;
     this.lastSwordIntentEmitted = -1;
     this.lastFollowUpEmitted = true; // 先置 true 再 emit，保证 UI 收到「追加技失效」
     this.emitFollowUp();
@@ -979,7 +980,6 @@ export class GameEngine {
       kills: 0, maxCombo: 0, eliteKills: 0, bossKills: 0,
       timeSurvived: 0, score: 0, wave: 1, affixes: [],
     };
-    this.lastInkEmitted = -1;
     this.lastShieldEmitted = -1;
     this.lastBossEmitted = '';
     this.awakening = 0;
@@ -989,9 +989,8 @@ export class GameEngine {
     sound.stopHeartbeat();
     sound.startAmbientBgm(); // 重开恢复 BGM（暂停期间已停）
     this.renderDirty = true;
-    // 状态全量同步给 UI（修复重开后血条/墨条残留旧值）
+    // 状态全量同步给 UI（修复重开后血条残留旧值）
     this.emitHp();
-    this.emitInk();
     this.emitShield(true);
     this.callbacks.onComboChange(0);
     this.emitSwordIntent(true); // 剑意归零同步 UI
@@ -1173,11 +1172,9 @@ export class GameEngine {
       this.addFloatingText('荡', player.pos.x, player.pos.y + 130, '#fbbf24', 1.6, true, true);
     }
 
-    // 释放后短暂无敌 + 墨意回补，鼓励绝境反打
+    // 释放后短暂无敌，鼓励绝境反打
     player.isInvincible = true;
     player.invincibleTimer = Math.max(player.invincibleTimer, 1.0);
-    player.ink = Math.min(player.maxInk, player.ink + 20);
-    this.emitInk();
   }
 
   // --- WAVE CONFIGURATION ---
@@ -2019,15 +2016,6 @@ export class GameEngine {
   private executePhantomSliceChain(targets: { enemy: EnemyEntity; eye: boolean }[], gesture: GestureResult) {
     const player = this.player;
 
-    // Ink cost（无双墨耗减免：招式循环永动机）
-    const inkCost = this.musouInk(gesture.type === 'TAP' ? 6 : gesture.type === 'CIRCLE' ? 22 : 15);
-    if (player.ink < inkCost) {
-      this.addFloatingText('内力不济', player.pos.x, player.pos.y + 60, '#ef4444', 1.2);
-      return;
-    }
-    player.ink = Math.max(0, player.ink - inkCost);
-    this.emitInk();
-
     // 无双连招链登记：变招（交替不同招式）涨层更快 → 伤害/范围滚雪球
     this.registerGestureChain(gesture.type);
 
@@ -2364,7 +2352,7 @@ export class GameEngine {
   private executeGestureMove(res: GestureResult) {
     const player = this.player;
 
-    // 被动·追加技：命中后下一次技能即为追加技（墨耗为 0）；本招未命中则状态消耗、下次不再是追加技
+    // 被动·追加技：命中后下一次技能即为追加技；本招未命中则状态消耗、下次不再是追加技
     const isFollowUp = player.followUpReady;
 
     // 被动·七星光芒剑：印记达 3 层时，下一次「技能」升格为七段追击斩（追加技形态为七星）
@@ -2373,23 +2361,7 @@ export class GameEngine {
       return;
     }
 
-    // Check ink cost（无双墨耗减免：招式放得勤快；追加技不耗墨意）
-    const inkCost = isFollowUp
-      ? 0
-      : this.musouInk(
-          res.type === 'TAP' ? 8
-          : res.type === 'CIRCLE' ? 25
-          : res.type === 'DIAGONAL_UP' ? POKUANG.inkCost
-          : 18,
-        );
-    if (player.ink < inkCost) {
-      this.addFloatingText('内力不济', player.pos.x, player.pos.y + 60, '#ef4444', 1.2);
-      return;
-    }
-    if (inkCost > 0) {
-      player.ink = Math.max(0, player.ink - inkCost);
-      this.emitInk();
-    }
+    // 夏洛特式：招式无任何资源消耗（无蓝条），想放就放
 
     // 追加技在此刻生效并消耗：命中则下一招再续，未命中则不再续
     if (isFollowUp) {
@@ -2539,14 +2511,14 @@ export class GameEngine {
             const ox = player.facing * (12 + (i % 2) * 12 + t01 * 6);
             const oz = -26 + t01 * 52;
 
-            // 每道都是一笔直线剑痕（不用弧光，避免看起来像画圈）
+            // 每道都是一道竖着的剑痕（不是横劈、也不是弧光圈）
             this.spawnInkSlash(
               player.pos.x + ox,
-              player.pos.y + 24,
+              player.pos.y + 26,
               player.pos.z + oz,
-              'THRUST',
+              'VERTICAL',
               player.facing,
-              isFirst || isLast ? 1.15 : 0.8,
+              isFirst || isLast ? 1.15 : 0.85,
               isFirst || isLast ? '#fde68a' : '#e2e8f0',
             );
 
@@ -2582,9 +2554,9 @@ export class GameEngine {
                   e.hitStun = Math.max(e.hitStun, 0.6);
                 }
               }
-              // 剑痕成形 → 破空光剑爆发（追加技更盛）
-              this.spawnShockRing(player.pos.x, player.pos.z, 10, isFollowUp ? 210 : 170, 0.55, '#ffffff', 4);
-              this.spawnShockRing(player.pos.x, player.pos.z, 6, isFollowUp ? 150 : 120, 0.4, '#fde68a', 3);
+              // 剑痕成形 → 破空光剑爆发（只留墨花与镜头冲击，不画扩散圆环）
+              this.spawnInkBurst(player.pos, isFollowUp ? 22 : 16, '#fde68a');
+              this.spawnInkBurst(player.pos, isFollowUp ? 12 : 9, '#f8fafc');
               this.triggerZoomPunch(isFollowUp ? 0.045 : 0.03);
               this.addFloatingText(isFollowUp ? '破空光剑 · 爆发' : '破空', player.pos.x, player.pos.y + 96, '#fde68a', 1.5, true, true);
               this.cameraShake = 14;
@@ -2651,7 +2623,7 @@ export class GameEngine {
       }
 
       case 'ZIGZAG': {
-        // 前进喷泉（夏洛特二技能）：向前冲刺并快速连刺六次，每段造成伤害并回复气血
+        // 前进喷泉（夏洛特二技能）：自动索敌 → 转身 → 朝目标冲刺并连刺六次，每段造成伤害并回复气血
         player.state = 'ATTACK_DASH';
         player.stateTimer = 0;
         player.stateDuration = this.poseDur(0.34);
@@ -2659,33 +2631,58 @@ export class GameEngine {
         player.invincibleTimer = 0.35;
         sound.playDash();
 
-        const dashDistance = player.facing * (this.gameMode === 'MUSOU' ? 320 : 240);
-        const startX = player.pos.x;
-        const targetX = player.pos.x + dashDistance;
+        // --- 自动索敌：锁定最近的活妖墨并转身；无目标则沿当前朝向直冲 ---
+        const lock = this.findFountainTarget();
+        if (lock) player.facing = lock.pos.x >= player.pos.x ? 1 : -1;
 
-        // 冲刺残影
+        const maxDash = this.gameMode === 'MUSOU' ? 320 : 240;
+        const startX = player.pos.x;
+        const startZ = player.pos.z;
+        let dashDistance: number;
+        let endZ = startZ;
+
+        if (lock) {
+          const dx = lock.pos.x - startX;
+          const dz = lock.pos.z - startZ;
+          // 停在目标身侧（留 46 身位），冲过头会让六连刺全部落空
+          const travel = Math.min(maxDash, Math.max(0, Math.abs(dx) - 46));
+          dashDistance = player.facing * travel;
+          // 纵深按冲刺比例跟进，保证落地后 rangeZ 覆盖目标；贴脸时全量对齐
+          const ratio = Math.abs(dx) > 1 ? Math.min(1, travel / Math.abs(dx)) : 1;
+          endZ = startZ + dz * ratio;
+        } else {
+          dashDistance = player.facing * maxDash;
+        }
+
+        // 冲刺残影（沿真实轨迹，含纵深插值）
         for (let i = 0; i < 4; i++) {
+          const k = i / 4;
           player.dashTrail.push({
-            x: startX + (dashDistance * i) / 4,
+            x: startX + dashDistance * k,
             y: player.pos.y,
-            z: player.pos.z,
+            z: startZ + (endZ - startZ) * k,
           });
         }
 
-        // 掠影无踪：冲刺路径风刃（词条）
+        // 掠影无踪：冲刺路径风刃（词条）——按真实轨迹判定，不再假设纯横向
         const hasDashStrike = player.affixes.some((a) => a.stats.dashStrikeEnabled);
         if (hasDashStrike) {
           for (const enemy of this.enemies) {
             if (enemy.hp <= 0) continue;
-            const t = Math.max(0, Math.min(1, (enemy.pos.x - startX) / (dashDistance || 1)));
+            const t = Math.abs(dashDistance) > 1
+              ? Math.max(0, Math.min(1, (enemy.pos.x - startX) / dashDistance))
+              : 0;
             const px = startX + dashDistance * t;
-            if (Math.hypot(enemy.pos.x - px, enemy.pos.z - player.pos.z) < 45) {
+            const pz = startZ + (endZ - startZ) * t;
+            if (Math.hypot(enemy.pos.x - px, enemy.pos.z - pz) < 52) {
               this.damageEnemy(enemy, Math.round(20 * this.getAffixDamageMultiplier()), false, 0.3);
             }
           }
         }
 
-        player.pos.x = targetX;
+        player.pos.x = startX + dashDistance;
+        player.pos.z = endZ;
+        this.clampToArena(player.pos); // 自动索敌冲刺同样不得越出空气墙
         this.cameraShake = 8;
         this.spawnSpeedLines(player.pos, 14, '#17130f');
         this.spawnInkSlash(player.pos.x, player.pos.y + 24, player.pos.z, 'DASH', player.facing, 1.05);
@@ -2695,6 +2692,16 @@ export class GameEngine {
         for (let i = 0; i < 6; i++) {
           this.schedule(i * 0.055, () => {
             if (this.runEnded || player.hp <= 0) return;
+
+            // 每段出刺前重新校准：目标被击退/阵亡时自动改锁，始终朝敌人出剑
+            const aim = lock && lock.hp > 0 ? lock : this.findFountainTarget();
+            if (aim) {
+              player.facing = aim.pos.x >= player.pos.x ? 1 : -1;
+              // 轻度纵深跟随，防击退把目标推出命中带
+              player.pos.z += (aim.pos.z - player.pos.z) * 0.35;
+              this.clampToArena(player.pos);
+            }
+
             this.spawnInkSlash(
               player.pos.x + player.facing * (18 + i * 7),
               player.pos.y + 22,
@@ -2705,12 +2712,14 @@ export class GameEngine {
               '#7dd3fc',
             );
             this.performHitCheck({
-              rangeX: 130,
-              rangeZ: 48,
+              rangeX: 150,
+              rangeZ: 72,
               damageMultiplier: 0.85,
               knockbackX: player.facing * 3,
               knockbackY: 1,
               isGesture: true,
+              antiAir: true,      // 自动索敌可锁空中飞白鹤，连刺须够得到
+              rearReach: -90,     // 覆盖冲过头 / 击退到身后的情况
               followUp: isFollowUp,
               gestureType: res.type,
             });
@@ -2729,12 +2738,7 @@ export class GameEngine {
           });
         }
 
-        // Phantom chain affix check
-        const hasPhantomChain = player.affixes.some((a) => a.stats.flashCooldownReset);
-        if (hasPhantomChain) {
-          player.ink = Math.min(player.maxInk, player.ink + 18);
-          this.emitInk();
-        }
+        // 招式无资源消耗，收招即结束
         break;
       }
     }
@@ -2759,9 +2763,32 @@ export class GameEngine {
   }
 
   /**
-   * 释放「七星光芒剑」：清空剑意 → 锁敌贴身 → 七段连斩（每段 20% 减速 + 伤残减攻速）
-   * → 末剑追加目标已损气血 12% 斩杀伤害。全程 21%~35% 免伤。
-   * 七剑走暂停安全调度器：暂停冻结、重开清空，绝不脱离游戏时钟。
+   * 前进喷泉自动索敌：锁定锁敌半径内最近的存活妖墨（含高空悬停单位）。
+   * 纵深差加权 1.2，避免选到「横向很近但根本不在同一条进击线上」的目标。
+   * 无目标返回 null，调用方沿当前朝向直冲作为保底。
+   */
+  private findFountainTarget(maxRange: number = 460): EnemyEntity | null {
+    const player = this.player;
+    let best: EnemyEntity | null = null;
+    let bestDist = maxRange;
+    for (const enemy of this.enemies) {
+      if (enemy.hp <= 0) continue;
+      const d = Math.hypot(enemy.pos.x - player.pos.x, (enemy.pos.z - player.pos.z) * 1.2);
+      if (d < bestDist) {
+        bestDist = d;
+        best = enemy;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * 释放「七星光芒剑」：清空 3 层印记 → 起手在主人身上画出七角星（带放射光芒）→
+   * 七段连斩（每段瞬身贴身，附 20% 减速 + 伤残减攻速）→ 末剑追加目标已损气血 12% 斩杀。
+   * 全程 21%~35% 免伤。
+   *
+   * 七剑由主循环的 `qixingStep()` 逐帧推进（每 0.14 秒一剑），不用嵌套调度：
+   * 剑数 / 间隔 / 收剑只有一个真值来源，不会出现「冲过去就没下文」。
    */
   private executeSevenStarBlade(isFollowUp: boolean = false) {
     const player = this.player;
@@ -2775,116 +2802,156 @@ export class GameEngine {
       QIXING.guardMax,
       QIXING.guardBase + Math.max(0, this.wave - 1) * QIXING.guardPerWave,
     );
-    player.qixingGuardTimer = QIXING.sequenceSec;
+    player.qixingGuardTimer = QIXING.sequenceSec + 0.3;
 
     sound.playCalligraphyGong('七星光芒剑');
     this.addFloatingText('『七星光芒剑』', player.pos.x, player.pos.y + 92, '#fbbf24', 1.7, true, true);
-    this.spawnShockRing(player.pos.x, player.pos.z, 8, 120, 0.45, '#fde68a', 3);
     this.triggerZoomPunch(0.026);
     this.cameraShake = 9;
 
-    // 七角星剑阵：在主人身上画出七角星
-    this.spawnStarSigil(player.pos.x, player.pos.y + 42, player.pos.z, 1.05, '#fde68a', 1.05);
+    // 七角星剑阵：钉在主人身上逐帧跟随（一路瞬身也始终罩在角色身上），并放出七道光芒
+    this.spawnStarSigil(
+      player.pos.x,
+      player.pos.y + 42,
+      player.pos.z,
+      isFollowUp ? 1.35 : 1.15,
+      isFollowUp ? '#fbbf24' : '#fde68a',
+      QIXING.sequenceSec + 0.35,
+      { follow: true, rays: true },
+    );
 
-    const affixMult = this.getAffixDamageMultiplier();
-    const gestureMult = this.getGestureDamageMultiplier();
-    const chainMult = this.gameMode === 'MUSOU' ? this.chainDmgMult : 1;
-    let landed = 0;
+    // 起手姿态：横剑蓄势
+    player.state = 'ATTACK_TAICHI';
+    player.stateTimer = 0;
+    player.stateDuration = this.poseDur(0.16);
 
-    for (let i = 0; i < QIXING.hits; i++) {
-      const isLast = i === QIXING.hits - 1;
-      this.schedule(i * QIXING.hitIntervalSec, () => {
-        if (this.runEnded || player.hp <= 0) {
-          // 战局终止（阵亡/收笔）：解除七星锁定态，避免剑意永久封死
-          if (isLast) this.qixingActive = false;
-          return;
-        }
-        const target = this.findSevenStarTarget();
-        if (!target) {
-          if (isLast) this.finishSevenStar(landed);
-          return;
-        }
+    // 交给主循环推进七剑
+    this.qixingSeq = {
+      index: 0,
+      timer: 0.02,
+      landed: 0,
+      isFollowUp,
+      affixMult: this.getAffixDamageMultiplier(),
+      gestureMult: this.getGestureDamageMultiplier(),
+      chainMult: this.gameMode === 'MUSOU' ? this.chainDmgMult : 1,
+    };
+  }
 
-        // 锁敌贴身：瞬身至目标身侧，面朝目标
-        const side: 1 | -1 = player.pos.x <= target.pos.x ? -1 : 1;
-        player.pos.x = target.pos.x + side * 62;
-        player.pos.z = target.pos.z;
-        this.clampToArena(player.pos); // 贴身落点同样不得越出空气墙
-        player.pos.y = Math.max(0, target.pos.y * 0.35);
-        player.vel.y = 0;
-        player.facing = side === -1 ? 1 : -1;
-        player.state = i % 2 === 0 ? 'ATTACK_HORIZONTAL' : 'ATTACK_VERTICAL';
-        player.stateTimer = 0;
-        player.stateDuration = this.poseDur(0.12);
+  /** 七星逐帧推进：每帧由 update 调用，计时到点落一剑 */
+  private qixingStep(dt: number) {
+    const seq = this.qixingSeq;
+    if (!seq) return;
+    const player = this.player;
 
-        // 七剑：前六剑为递进的常规剑光，末剑换成一记更大更亮的白光重斩
-        if (isLast) {
-          this.spawnInkSlash(target.pos.x, target.pos.y + 26, target.pos.z, 'HORIZONTAL', player.facing, 2.4, '#ffffff');
-          this.spawnInkSlash(target.pos.x, target.pos.y + 34, target.pos.z, 'VERTICAL', player.facing, 1.9, '#ffffff');
-        } else {
-          const kind = i % 2 === 0 ? 'HORIZONTAL' : 'VERTICAL';
-          this.spawnInkSlash(target.pos.x, target.pos.y + 24, target.pos.z, kind, player.facing, 0.8 + i * 0.07, '#f8fafc');
-        }
-        this.spawnInkBurst(target.pos, isLast ? 16 : 3, isLast ? '#ffffff' : '#e2e8f0');
-
-        // 每段伤害：基础 24 × 0.62 × 词条 × 手势（无双再叠连招链）
-        const raw = 24 * QIXING.hitDmgMult * affixMult * gestureMult * chainMult;
-        const critChance = 0.15 + this.sumStat('critChanceBonus');
-        const isCrit = Math.random() < critChance;
-        const finalDmg = Math.round(isCrit ? raw * this.getCritMultiplier() : raw);
-        this.damageEnemy(target, finalDmg, isCrit, isLast ? 0.75 : 0.3, true);
-        landed++;
-        this.applyLifesteal(finalDmg);
-        this.gainAwakening((isCrit ? 4.5 : 2.5) * (this.gameMode === 'MUSOU' ? MUSOU_TUNING.awakeningPerHitMult : 1));
-
-        // 伤残与减速：每段挂一层伤残（-10% 攻速，至多 2 层），并附 20% 减速
-        if (target.hp > 0) {
-          target.qixingSlowTimer = QIXING.slowSec;
-          target.crippleStacks = Math.min(QIXING.crippleMaxStacks, (target.crippleStacks ?? 0) + 1);
-          target.crippleTimer = QIXING.crippleSec;
-        }
-
-        // 末剑：追加目标已损气血 12% 的斩杀伤害
-        if (isLast && target.hp > 0) {
-          const missing = Math.max(0, target.maxHp - target.hp);
-          const execDmg = Math.max(1, Math.round((missing * QIXING.executePercent) / 100));
-          this.damageEnemy(target, execDmg, true, 0.95, true);
-          this.addFloatingText(`斩杀 ${execDmg}`, target.pos.x, target.pos.y + 72, '#fbbf24', 1.4, true, true);
-        }
-
-        this.hitStopTimer = Math.max(this.hitStopTimer, 0.018);
-        sound.playSlash(isLast ? 'heavy' : 'light');
-        if (isLast) {
-          this.cameraShake = 20;
-          this.triggerZoomPunch(0.05);
-          this.triggerSlowMo(0.22);
-          this.spawnShockRing(target.pos.x, target.pos.z, 8, 175, 0.55, '#fde68a', 4);
-          this.spawnShockRing(target.pos.x, target.pos.z, 4, 110, 0.4, '#fbbf24', 2.5);
-          this.addCrackDecal(target.pos, 1.15);
-          // 浮生妄：彼岸花绽放（朱红花瓣四散，无重力旋落）
-          for (let k = 0; k < 12; k++) {
-            const ang = Math.random() * Math.PI * 2;
-            this.pushParticle({
-              x: target.pos.x,
-              y: target.pos.y + 24 + Math.random() * 46,
-              z: target.pos.z,
-              vx: Math.cos(ang) * (40 + Math.random() * 80),
-              vy: 26 + Math.random() * 62,
-              vz: Math.sin(ang) * (18 + Math.random() * 46),
-              size: 3 + Math.random() * 4,
-              alpha: 0.95,
-              decay: 0.55,
-              color: Math.random() < 0.7 ? '#f8fafc' : '#fde68a',
-              shape: 'petal',
-              noGravity: true,
-              spin: (Math.random() - 0.5) * 7,
-              spinPhase: ang,
-            });
-          }
-          this.finishSevenStar(landed);
-        }
-      });
+    // 战局终止：立刻收剑，避免印记/免伤永久封死
+    if (this.runEnded || player.hp <= 0) {
+      this.qixingSeq = null;
+      this.qixingActive = false;
+      return;
     }
+
+    seq.timer -= dt;
+    if (seq.timer > 0) return;
+    seq.timer = QIXING.hitIntervalSec;
+
+    const i = seq.index;
+    const isLast = i === QIXING.hits - 1;
+
+    // 锁敌：优先最近的活妖墨；一个都没有就原地空挥（照样出剑光，不会「冲过去就没下文」）
+    const target = this.findSevenStarTarget();
+    if (target) {
+      const side: 1 | -1 = player.pos.x <= target.pos.x ? -1 : 1;
+      player.pos.x = target.pos.x + side * 58;
+      player.pos.z = target.pos.z;
+      this.clampToArena(player.pos); // 贴身落点同样不得越出空气墙
+      player.pos.y = Math.max(0, target.pos.y * 0.35);
+      player.vel.y = 0;
+      player.facing = side === -1 ? 1 : -1;
+    }
+    player.state = i % 2 === 0 ? 'ATTACK_HORIZONTAL' : 'ATTACK_VERTICAL';
+    player.stateTimer = 0;
+    player.stateDuration = this.poseDur(0.1);
+
+    // 剑光：落在主角身前（一定看得见），末剑换成更大更亮的白刃双斩
+    const sx = player.pos.x + player.facing * 24;
+    const sy = player.pos.y + 26;
+    const sz = player.pos.z;
+    if (isLast) {
+      this.spawnInkSlash(sx, sy + 6, sz, 'VERTICAL', player.facing, 2.5, '#ffffff');
+      this.spawnInkSlash(sx, sy, sz, 'HORIZONTAL', player.facing, 2.0, '#ffffff');
+    } else {
+      const kind = i % 2 === 0 ? 'HORIZONTAL' : 'VERTICAL';
+      // 前四剑银白、后三剑转金（越打越亮，第七剑是纯白重斩）
+      this.spawnInkSlash(sx, sy, sz, kind, player.facing, 1.0 + i * 0.08, i >= 4 ? '#fde68a' : '#f8fafc');
+    }
+
+    if (target) {
+      this.spawnInkBurst(target.pos, isLast ? 16 : 4, isLast ? '#ffffff' : '#e2e8f0');
+
+      // 每段伤害：基础 24 × 0.62 × 词条 × 手势（无双再叠连招链）
+      const raw = 24 * QIXING.hitDmgMult * seq.affixMult * seq.gestureMult * seq.chainMult;
+      const critChance = 0.15 + this.sumStat('critChanceBonus');
+      const isCrit = Math.random() < critChance;
+      const finalDmg = Math.round(isCrit ? raw * this.getCritMultiplier() : raw);
+      this.damageEnemy(target, finalDmg, isCrit, isLast ? 0.75 : 0.3, true);
+      seq.landed++;
+      this.applyLifesteal(finalDmg);
+      this.gainAwakening((isCrit ? 4.5 : 2.5) * (this.gameMode === 'MUSOU' ? MUSOU_TUNING.awakeningPerHitMult : 1));
+
+      // 伤残与减速：每段挂一层伤残（-10% 攻速，至多 2 层），并附 20% 减速
+      if (target.hp > 0) {
+        target.qixingSlowTimer = QIXING.slowSec;
+        target.crippleStacks = Math.min(QIXING.crippleMaxStacks, (target.crippleStacks ?? 0) + 1);
+        target.crippleTimer = QIXING.crippleSec;
+      }
+
+      // 末剑：追加目标已损气血 12% 的斩杀伤害
+      if (isLast && target.hp > 0) {
+        const missing = Math.max(0, target.maxHp - target.hp);
+        const execDmg = Math.max(1, Math.round((missing * QIXING.executePercent) / 100));
+        this.damageEnemy(target, execDmg, true, 0.95, true);
+        this.addFloatingText(`斩杀 ${execDmg}`, target.pos.x, target.pos.y + 72, '#fbbf24', 1.4, true, true);
+      }
+    }
+
+    this.hitStopTimer = Math.max(this.hitStopTimer, 0.018);
+    sound.playSlash(isLast ? 'heavy' : 'light');
+
+    if (isLast) {
+      this.cameraShake = 20;
+      this.triggerZoomPunch(0.05);
+      this.triggerSlowMo(0.22);
+      if (target) {
+        this.spawnInkBurst(target.pos, 16, '#fde68a');
+        this.spawnInkBurst(target.pos, 8, '#fff7d6');
+        this.addCrackDecal(target.pos, 1.15);
+        // 光屑四散（无重力旋落）
+        for (let k = 0; k < 12; k++) {
+          const ang = Math.random() * Math.PI * 2;
+          this.pushParticle({
+            x: target.pos.x,
+            y: target.pos.y + 24 + Math.random() * 46,
+            z: target.pos.z,
+            vx: Math.cos(ang) * (40 + Math.random() * 80),
+            vy: 26 + Math.random() * 62,
+            vz: Math.sin(ang) * (18 + Math.random() * 46),
+            size: 3 + Math.random() * 4,
+            alpha: 0.95,
+            decay: 0.55,
+            color: Math.random() < 0.7 ? '#f8fafc' : '#fde68a',
+            shape: 'petal',
+            noGravity: true,
+            spin: (Math.random() - 0.5) * 7,
+            spinPhase: ang,
+          });
+        }
+      }
+      this.qixingSeq = null;
+      this.finishSevenStar(seq.landed);
+      return;
+    }
+
+    seq.index++;
   }
 
   /** 七星收剑：连击结算 + 收尾演出 */
@@ -2899,11 +2966,8 @@ export class GameEngine {
       this.addFloatingText(`七星落尽 · ${landed} 剑`, player.pos.x, player.pos.y + 100, '#fde68a', 1.45, true, true);
       sound.playHit(true);
     }
-    this.spawnShockRing(player.pos.x, player.pos.z, 6, 150, 0.45, '#1c1712', 2.5);
-  }
-
-  /** 无双手势墨耗减免：招式放得勤快，不能力不济卡壳 */
-  private musouInk(base: number): number {    return this.gameMode === 'MUSOU' ? Math.round(base * MUSOU_TUNING.gestureCostMult) : base;
+    // 收势只留一点墨花，不画扩散圆环
+    this.spawnInkBurst(player.pos, 10, '#1c1712');
   }
 
   /** 无双攻击动画加速：收招更快，招式连绵如疾风（仅玩家攻击姿态） */
@@ -3021,11 +3085,6 @@ export class GameEngine {
 
   private emitHp() {
     this.callbacks.onHpChange(this.player.hp, this.player.maxHp);
-  }
-
-  private emitInk() {
-    this.lastInkEmitted = Math.floor(this.player.ink);
-    this.callbacks.onInkChange(this.player.ink, this.player.maxInk);
   }
 
   private emitShield(force: boolean = false) {
@@ -3305,12 +3364,6 @@ export class GameEngine {
         }
       }
 
-      // 胸藏万墨：暴击回墨
-      const critInk = this.sumStat('critGainInk');
-      if (critInk > 0) {
-        player.ink = Math.min(player.maxInk, player.ink + critInk);
-        this.emitInk();
-      }
     } else if (fxLevel && enemy.hitStun > 0.5) {
       this.addFloatingText('『僵直』', enemy.pos.x, enemy.pos.y + 55, '#f59e0b', 1.15);
     }
@@ -3470,13 +3523,6 @@ export class GameEngine {
 
     this.callbacks.onWaveChange(this.wave, this.waveTitle, Math.max(0, this.totalEnemiesInWave - this.enemiesKilledInWave));
 
-    // Ink recover on kill (精英额外回复；无双杀得多回得快，招式循环爽快)
-    const inkGain = enemy.elite
-      ? (this.gameMode === 'MUSOU' ? MUSOU_TUNING.killInkElite : 25)
-      : (this.gameMode === 'MUSOU' ? MUSOU_TUNING.killInk : 15);
-    this.player.ink = Math.min(this.player.maxInk, this.player.ink + inkGain);
-    this.emitInk();
-
     // 雷引连枝：击杀释放连锁闪电
     const chainCount = this.sumStat('chainLightning');
     if (chainCount > 0) {
@@ -3564,9 +3610,22 @@ export class GameEngine {
   }
 
   /** 生成一笔水墨剑弧（招式专属挥砍特效） */
-  /** 七角星剑阵：在角色身上画出七角星（{7/3} 星形连线 + 七枚光点） */
-  private spawnStarSigil(x: number, y: number, z: number, size: number = 1, color: string = '#fde68a', life: number = 1.0) {
-    this.starSigils.push({ x, y, z, life, maxLife: life, size, color });
+  /**
+   * 七角星剑阵：在角色身上画出七角星（{7/3} 星形连线 + 七枚光点）。
+   * follow=true 时星阵钉在主角身上逐帧跟随——七星连斩要一路瞬身，
+   * 星阵若留在起手点，玩家就只看得到「冲过去」而看不到「七星」。
+   * rays=true 追加放射光芒（七星光芒剑的「光芒」）。
+   */
+  private spawnStarSigil(
+    x: number, y: number, z: number,
+    size: number = 1, color: string = '#fde68a', life: number = 1.0,
+    opts: { follow?: boolean; rays?: boolean } = {},
+  ) {
+    this.starSigils.push({
+      x, y, z, life, maxLife: life, size, color,
+      follow: !!opts.follow,
+      rays: !!opts.rays,
+    });
     if (this.starSigils.length > 3) this.starSigils.shift();
   }
 
@@ -3817,20 +3876,6 @@ export class GameEngine {
       this.hurtFlashTimer -= dt;
     }
 
-    // Passive Ink Energy Regen (节流回调)
-    // 无双：回墨速率 14→18/秒（MUSOU_TUNING.inkRegen），招式循环更爽快
-    let regenMult = 1.0;
-    for (const a of player.affixes) {
-      if (a.stats.inkRegenBonus) regenMult += a.stats.inkRegenBonus / 100;
-    }
-    const baseRegen = this.gameMode === 'MUSOU' ? MUSOU_TUNING.inkRegen : 14;
-    player.ink = Math.min(player.maxInk, player.ink + dt * baseRegen * regenMult);
-    const inkInt = Math.floor(player.ink);
-    if (inkInt !== this.lastInkEmitted) {
-      this.lastInkEmitted = inkInt;
-      this.callbacks.onInkChange(player.ink, player.maxInk);
-    }
-
     // Combo timer decay
     if (player.comboTimer > 0) {
       player.comboTimer -= dt;
@@ -3867,11 +3912,19 @@ export class GameEngine {
     }
     // 七星免伤计时
     if (player.qixingGuardTimer > 0) player.qixingGuardTimer -= dt;
-    // 七角星剑阵衰减
+    // 七星连斩推进（逐帧驱动七剑，间隔由 QIXING.hitIntervalSec 控制）
+    this.qixingStep(dt);
+    // 七角星剑阵衰减（follow 星阵钉在主角身上逐帧跟随）
     if (this.starSigils.length > 0) {
       for (let i = this.starSigils.length - 1; i >= 0; i--) {
-        this.starSigils[i].life -= dt;
-        if (this.starSigils[i].life <= 0) this.starSigils.splice(i, 1);
+        const sig = this.starSigils[i];
+        sig.life -= dt;
+        if (sig.life <= 0) { this.starSigils.splice(i, 1); continue; }
+        if (sig.follow) {
+          sig.x = player.pos.x;
+          sig.y = player.pos.y + 42;
+          sig.z = player.pos.z;
+        }
       }
     }
 
@@ -6056,7 +6109,6 @@ export class GameEngine {
       const alpha = Math.sin(Math.min(1, t) * Math.PI) * 0.95;
       if (alpha <= 0.02) continue;
       const R = 86 * s.size * pr.scale * (0.55 + 0.45 * (1 - Math.pow(1 - t, 3)));
-      const spin = t * 1.5;
 
       ctx.save();
       ctx.translate(pr.sx, pr.sy);
@@ -6066,10 +6118,44 @@ export class GameEngine {
 
       const px: number[] = [];
       const py: number[] = [];
+      // 七角星固定不转：一笔一笔「画」出来，不是绕圈旋转
       for (let i = 0; i < 7; i++) {
-        const a = -Math.PI / 2 + (i / 7) * Math.PI * 2 + spin * 0.5;
+        const a = -Math.PI / 2 + (i / 7) * Math.PI * 2;
         px.push(Math.cos(a) * R);
         py.push(Math.sin(a) * R);
+      }
+
+      // 「光芒」：七道自星尖向外放射的直线光束（画在星线之下；不是环、不旋转）
+      if (s.rays) {
+        const rayLen = R * (0.7 + 0.4 * Math.min(1, t * 1.7));
+        ctx.save();
+        for (let i = 0; i < 7; i++) {
+          const a = -Math.PI / 2 + (i / 7) * Math.PI * 2;
+          const ux = Math.cos(a);
+          const uy = Math.sin(a);
+          const tipX = ux * (R + rayLen);
+          const tipY = uy * (R + rayLen);
+          const grad = ctx.createLinearGradient(px[i], py[i], tipX, tipY);
+          grad.addColorStop(0, s.color);
+          grad.addColorStop(0.35, 'rgba(255,247,214,0.5)');
+          grad.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.globalAlpha = alpha * 0.8;
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = 3.6 * s.size;
+          ctx.beginPath();
+          ctx.moveTo(px[i], py[i]);
+          ctx.lineTo(tipX, tipY);
+          ctx.stroke();
+          // 白色内芯让「光芒」更锐
+          ctx.globalAlpha = alpha * 0.9;
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.1 * s.size;
+          ctx.beginPath();
+          ctx.moveTo(px[i], py[i]);
+          ctx.lineTo(ux * (R + rayLen * 0.7), uy * (R + rayLen * 0.7));
+          ctx.stroke();
+        }
+        ctx.restore();
       }
 
       // 墨晕（宽而淡）

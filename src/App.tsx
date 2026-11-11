@@ -33,8 +33,6 @@ export default function App() {
   const [controlMode, setControlMode] = useState<ControlMode>('FULL_GESTURE');
   const [hp, setHp] = useState<number>(120);
   const [maxHp, setMaxHp] = useState<number>(120);
-  const [ink, setInk] = useState<number>(100);
-  const [maxInk, setMaxInk] = useState<number>(100);
   const [shield, setShield] = useState<number>(0);
   const [shieldMax, setShieldMax] = useState<number>(0);
   const [wave, setWave] = useState<number>(1);
@@ -90,10 +88,6 @@ export default function App() {
       onHpChange: (newHp, newMaxHp) => {
         setHp(newHp);
         setMaxHp(newMaxHp);
-      },
-      onInkChange: (newInk, newMaxInk) => {
-        setInk(newInk);
-        setMaxInk(newMaxInk);
       },
       onShieldChange: (newShield, newShieldMax) => {
         setShield(newShield);
@@ -415,8 +409,6 @@ export default function App() {
         <HUD
           hp={hp}
           maxHp={maxHp}
-          ink={ink}
-          maxInk={maxInk}
           shield={shield}
           shieldMax={shieldMax}
           wave={wave}

@@ -34,7 +34,6 @@ export interface Affix {
     critDamageBonus?: number;   // percentage extra crit damage
     maxHpBonus?: number;        // flat
     moveSpeedBonus?: number;    // percentage
-    inkRegenBonus?: number;     // percentage
     damageReduction?: number;   // percentage
     gestureBonus?: number;      // percentage extra damage on gestures
     lifestealPercent?: number;  // 0 to 1
@@ -50,7 +49,6 @@ export interface Affix {
     executeThreshold?: number;    // 斩杀线：敌人血量低于此比例直接处决
     reviveOnce?: boolean;         // 残页·续墨：死亡时原地复活一次
     thornsPercent?: number;       // 反伤：受击时反弹伤害比例
-    critGainInk?: number;         // 暴击回复墨意
     dashStrikeEnabled?: boolean;  // 冲刺时对路径敌人造成伤害
     // --- 觉醒/新敌词条 ---
     skySlayerPercent?: number;        // 对浮空妖敌伤害提升
@@ -140,8 +138,6 @@ export interface PlayerEntity {
   facing: 1 | -1; // 1 = right, -1 = left
   hp: number;
   maxHp: number;
-  ink: number;
-  maxInk: number;
   shield: number;         // 墨盾护盾值（优先承伤）
   shieldMax: number;
   state: ActionState;
@@ -425,8 +421,6 @@ export interface RunSnapshot {
   player: {
     hp: number;
     maxHp: number;
-    ink: number;
-    maxInk: number;
     shield: number;
     shieldMax: number;
     reviveUsed: boolean;

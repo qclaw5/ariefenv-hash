@@ -10,8 +10,6 @@ import { Affix, BossHudInfo, ControlMode, GameMode, GestureResult } from '../typ
 interface HUDProps {
   hp: number;
   maxHp: number;
-  ink: number;
-  maxInk: number;
   shield: number;
   shieldMax: number;
   wave: number;
@@ -51,8 +49,6 @@ interface HUDProps {
 export const HUD: React.FC<HUDProps> = ({
   hp,
   maxHp,
-  ink,
-  maxInk,
   shield,
   shieldMax,
   waveTitle,
@@ -86,7 +82,6 @@ export const HUD: React.FC<HUDProps> = ({
   const isMusou = gameMode === 'MUSOU';
 
   const hpPercent = Math.max(0, Math.min(100, (hp / maxHp) * 100));
-  const inkPercent = Math.max(0, Math.min(100, (ink / maxInk) * 100));
   const shieldPercent = shieldMax > 0 ? Math.max(0, Math.min(100, (shield / shieldMax) * 100)) : 0;
   const awakeningPercent = awakeningMax > 0 ? Math.max(0, Math.min(100, (awakening / awakeningMax) * 100)) : 0;
   const isAwakenReady = awakening >= awakeningMax;
@@ -158,18 +153,6 @@ export const HUD: React.FC<HUDProps> = ({
                 <span className="text-[#5a4a34] tabular-nums text-[9px]">{Math.ceil(shield)}/{shieldMax}</span>
               </div>
             )}
-
-            {/* Ink Energy Bar */}
-            <div className="flex items-center gap-1.5 text-[10px] font-ink-serif">
-              <span className="text-[#7c3aed] font-semibold w-6">墨意</span>
-              <div className="flex-1 h-2 bg-[#ded3b8] rounded-full overflow-hidden border border-[#b3a181]">
-                <div
-                  className="h-full bg-gradient-to-r from-[#6d28d9] to-[#7c3aed] transition-all duration-200"
-                  style={{ width: `${inkPercent}%` }}
-                />
-              </div>
-              <span className="text-[#5a4a34] tabular-nums text-[9px]">{Math.floor(ink)}/{maxInk}</span>
-            </div>
 
             {/* Awakening Bar（觉醒槽：满槽可释放「万墨归宗」[G]） */}
             <div className="flex items-center gap-1.5 text-[10px] font-ink-serif">
@@ -314,7 +297,7 @@ export const HUD: React.FC<HUDProps> = ({
         </div>
       )}
 
-      {/* 移动端迷你状态条：气血/墨意/觉醒/妖墨（桌面端同信息已在 header 条中，sm 隐藏） */}
+      {/* 移动端迷你状态条：气血/觉醒/妖墨（桌面端同信息已在 header 条中，sm 隐藏） */}
       <div className="sm:hidden pointer-events-none mx-auto w-full max-w-[400px] bg-[#f1ead7]/80 backdrop-blur-sm border border-[#d8c9aa] rounded-lg px-3 py-1.5 shadow-md">
         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
           <div className="flex items-center gap-1.5 text-[9px] font-ink-serif">
@@ -323,13 +306,6 @@ export const HUD: React.FC<HUDProps> = ({
               <div className={`h-full ${isLowHp ? 'bg-gradient-to-r from-[#7f1d1d] to-[#dc2626] animate-pulse' : 'bg-gradient-to-r from-[#b91c1c] to-[#dc2626]'}`} style={{ width: `${hpPercent}%` }} />
             </div>
             <span className="text-[#5a4a34] tabular-nums text-[8px] shrink-0">{hp}/{maxHp}</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-[9px] font-ink-serif">
-            <span className="text-[#7c3aed] font-semibold w-6 shrink-0">墨意</span>
-            <div className="flex-1 h-1.5 bg-[#ded3b8] rounded-full overflow-hidden border border-[#b3a181]">
-              <div className="h-full bg-gradient-to-r from-[#6d28d9] to-[#7c3aed]" style={{ width: `${inkPercent}%` }} />
-            </div>
-            <span className="text-[#5a4a34] tabular-nums text-[8px] shrink-0">{Math.floor(ink)}/{maxInk}</span>
           </div>
           <div className="flex items-center gap-1.5 text-[9px] font-ink-serif">
             <span className={`font-semibold w-6 shrink-0 ${isAwakenReady ? 'text-[#b45309] animate-pulse' : 'text-[#92703c]'}`}>觉醒</span>
@@ -430,7 +406,7 @@ export const HUD: React.FC<HUDProps> = ({
             {followUpReady && (
               <div
                 className="flex items-center gap-1 px-2 py-1 rounded-lg border border-[#0369a1] bg-[#0369a1]/15 shadow-[0_0_10px_rgba(3,105,161,0.45)] animate-pulse"
-                title="追加技：招式命中后，下一个不同招式自动强化（伤害/范围提升 + 附带伤残），且不耗墨意"
+                title="追加技：招式命中后，下一个不同招式自动强化（伤害/范围提升 + 附带伤残）"
               >
                 <span className="text-[9px] font-ink-serif font-bold text-[#075985]">追加技</span>
               </div>
@@ -507,7 +483,7 @@ export const HUD: React.FC<HUDProps> = ({
           <button
             onClick={() => onTriggerMove('ZIGZAG')}
             className="w-10 h-10 sm:w-11 sm:h-11 flex flex-col items-center justify-center bg-[#ded3b8] hover:bg-[#c9b995] active:scale-95 text-[#2b2118] border border-[#b3a181] rounded-lg transition-transform cursor-pointer"
-            title="前进喷泉 (快捷键 L / 右屏画折「Z」)：冲刺连刺六次并回血"
+            title="前进喷泉 (快捷键 L / 右屏画折「Z」)：自动锁定最近敌人并转身冲刺，连刺六次并回血"
           >
             <span className="text-sm font-calligraphy text-[#0284c7]">泉</span>
             <span className="text-[9px] text-[#85745a]">喷泉[L]</span>
